@@ -2,8 +2,6 @@
 
 Encrypted TOTP factors and hashed recovery codes integrate with model-first enrollment, management and transactional pending-session/token completion.
 
-Milestone 10 passed native acceptance. See the master roadmap for verification evidence and later integration boundaries.
-
 ## Model-first assembly
 
 Create `mfa.Store` from the borrowed PostgreSQL adapter, configured encryption
@@ -93,17 +91,17 @@ work.
 
 ## Complete a pending login
 
-A pending credential proves only the first authentication stage. Ordinary guards
-continue to reject it. Construct a typed verifier from the submitted factor and
-pass it to the original session or token binding:
-
-`TOTPRequest` is the application input struct with `Code string` tagged `json:"code"`; `request` is its decoded value. `pending` is the pending credential as `secret.String`.
+`TOTPRequest` is the application input struct with `Code mfa.TOTPCode` tagged `json:"code"`; `request` is its decoded value. `pending` is the pending credential as `secret.String`.
 
 The application owns `Account` and any generated tables or identities used below.
 
 Framework imports from `github.com/weiloon1234/Foundry-Go`: `encryption`, `auth/mfa`, `model`, `secret`, `auth/session`, `auth/token`.
 
 Inputs: `ctx context.Context`, `factors *mfa.Factors[Account, model.ID[Account]]`, `sessions *session.Sessions[Account, model.ID[Account]]`, `pending secret.String`, `request TOTPRequest`.
+
+A pending credential proves only the first authentication stage. Ordinary guards
+continue to reject it. Construct a typed verifier from the submitted factor and
+pass it to the original session or token binding:
 
 <!-- compiled-source: tests/fixtures/consumer/multifactor/completion.go#complete-totp-session -->
 ```go
@@ -115,7 +113,7 @@ factor, err := factors.Verifier(response)
 if err != nil {
 	return session.Issued[Account, model.ID[Account]]{}, err
 }
-issued, err := sessions.CompleteMFA(ctx, pending, factor, session.IssueOptions{})
+return sessions.CompleteMFA(ctx, pending, factor, session.IssueOptions{})
 ```
 
 `Tokens.CompleteMFA` has the same shape with `token.IssueOptions[User]`. Choose

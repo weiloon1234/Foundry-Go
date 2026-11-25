@@ -11,8 +11,6 @@
 
 **Milestone 11 passed live Cloudflare R2 and AWS S3 verification.** Native
 framework/consumer checks and the scoped cloud suites cover the contracts below.
-The owning blueprint records the
-evidence, including AWS versioned reads and cleanup, and provider limitations.
 
 `storage.Disk` owns operation limits, cancellation and returned readers.
 `storage/local` supplies a managed filesystem store. `storage/s3` uses the official
@@ -386,7 +384,7 @@ metadata, not authorization, and must remain inside trusted operational tooling.
 AWS advertises conditional writes/deletes and immutable version selection. The
 R2 profile advertises ranges, conditional reads, and conditional create and
 replace through multipart completion up to `MaxObjectBytes`. Live certification
-passed on 2026-11-15; see the recorded evidence.
+passed on 2026-11-15.
 Conditional deletion and historical versions remain unsupported. AWS
 conditional deletion cannot be combined with historical-version selection; the
 provider evaluates its condition against the current object. S3's mutable `null`
@@ -616,5 +614,4 @@ owner credentials described in [developer testing](developer-tooling-and-testing
 It creates a random namespace under that test-only prefix and never provisions a
 bucket or changes access policy. Passing cases clean their namespace; failed cases
 retain evidence. Without credentials, the live test skips unless required mode is
-enabled. See the live results and command
-for the certified sizes, ranged reads, and skipped capabilities.
+enabled. The live run certified multipart objects of 5242880 and 5242881 bytes and ranged reads of a 96 MiB object (it does not claim a 500 MiB run); the `conditional-delete` and `configured-public-read` cases skipped because R2 declares no conditional delete and no public base was configured.

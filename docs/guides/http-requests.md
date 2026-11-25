@@ -156,8 +156,6 @@ and agreement between error metadata and actual responses.
 
 Full repository verification also passed for this slice, including the real
 PostgreSQL and gopls checks, compiler-rejection fixtures and generation freshness.
-The master acceptance record
-owns the detailed evidence. The HTTP blueprint records current milestone status.
 
 ## Table operation declarations
 

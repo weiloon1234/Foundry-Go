@@ -2,9 +2,6 @@
 
 Accepted on 2026-09-24. Implementation, final native verification and the requested
 re-audit/fix round are complete.
-The blueprint owns the requested scope;
-the evidence record retains commands,
-source fingerprints, failures, corrections and verification limits.
 
 | Item | Delivered behavior | Evidence owner |
 | --- | --- | --- |

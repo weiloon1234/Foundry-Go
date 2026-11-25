@@ -3,8 +3,7 @@
 This additional review follows the accepted C01–C05 startup delivery. The review is
 complete. Three confirmed findings are fixed, the final native gate and broad
 race verification passed, all 52 fuzz targets passed, and fresh independent
-consumer measurements/security scans completed. The acceptance record
-and native measurements retain the evidence.
+consumer measurements/security scans completed.
 
 ## Scope and method
 

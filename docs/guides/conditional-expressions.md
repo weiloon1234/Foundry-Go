@@ -78,7 +78,9 @@ and scope; it never interpolates SQL. `expr.ParamOf(expr.Row(expr.At(scope, colu
 uses the scoped expression's projection type, including its nullable wrapper.
 `Row` cannot demote selected or aggregate values into row predicates. The original
 column-based `expr.Param(column, v)` continues to use its comparison input type.
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/goway/migration/pilot2_test.go):
+
+`Admin` is the application's model and `Admins` its generated table; the second function
+aliases the table's query as a named scope and returns the parameter bound to that scope's column:
 
 <!-- compiled-source: tests/fixtures/goway/migration/pilot2_test.go#pilot2-row-constant -->
 ```go
@@ -87,10 +89,11 @@ func enabledAdmins() rows.Scalar[Admin, bool] {
 		expr.Constant[Admin](codec.Bool[bool](), true)).Else(expr.Constant[Admin](codec.Bool[bool](), false))
 	return rows.SelectScalar(rows.From(Admins.Query()), expr.AsSelected(enabled))
 }
-func scopedUsername() {
-	type adminScope struct{}
+
+type adminScope struct{}
+
+func scopedUsername() expr.RowExpression[rows.Alias[adminScope, Admin], string] {
 	source := rows.As[adminScope](Admins.Query(), "admin")
-	parameter := expr.ParamOf(expr.Row(expr.At(rows.Scope(source), Admins.Username)), "Ada")
-	_ = parameter
+	return expr.ParamOf(expr.Row(expr.At(rows.Scope(source), Admins.Username)), "Ada")
 }
 ```

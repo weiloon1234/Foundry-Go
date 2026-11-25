@@ -13,9 +13,7 @@
 
 ## Overview
 
-Milestone 18 passed native verification and consumer review. The
-master evidence
-records the checks and operational limits.
+Milestone 18 passed native verification and consumer review.
 
 A model can also declare collections as `attachments.One`/`Many` fields; see
 [model extension slots](model-extension-slots.md). Slots reuse this policy and
@@ -802,5 +800,4 @@ must leave the intent unresolved.
 R2 supports conditional multipart create and replace up to `MaxObjectBytes`.
 Attachment upload policies and disk object-size limits still apply. Live
 certification also passed ranged reads of a 96 MiB object through the attachment
-seek reader. See the resource and provider acceptance record
-for measurements, deployment gaps and live-provider evidence.
+seek reader.

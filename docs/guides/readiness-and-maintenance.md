@@ -1,8 +1,6 @@
 # Readiness and maintenance
 
 Readiness checks and maintenance admission share the application lifecycle.
-The master roadmap records
-acceptance and verification evidence.
 
 <a id="agent-entry"></a>
 ## Agent entry

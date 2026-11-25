@@ -82,7 +82,7 @@ relative, err := endpoint.URL(ctx, path, query)
 if err != nil {
 	return "", err
 }
-absolute, err := foundryhttp.PublicURL(ctx, relative)
+return foundryhttp.PublicURL(ctx, relative)
 ```
 
 `AbsoluteURL(origin, relative)` is also available for explicitly configured

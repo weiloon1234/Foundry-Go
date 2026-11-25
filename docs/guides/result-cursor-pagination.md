@@ -23,7 +23,7 @@ report := rows.Select(rows.From(u.Query()), r.Row,
 cursor := rows.CursorFor(rows.RecordOf(report))
 ordered := cursor.OrderBy(expr.Asc(rows.At(cursor.Scope(), r.Nickname))).
 	UniqueBy(expr.Group(rows.At(cursor.Scope(), r.ID)))
-page, err := ordered.Paginate(ctx, db, orm.CursorRequest[reports.UserSummary]{Size: 20})
+return ordered.Paginate(ctx, db, orm.CursorRequest[reports.UserSummary]{Size: 20})
 ```
 
 `rows.CursorQuery.Scope()` identifies the completed output as `CursorScope[Result]`. `rows.At` on declared row columns retain each field's result owner, value type and nullability. Input model predicates and ordering descriptors cannot be used as output descriptors. Select a computed sort expression into a declared result field first, then order that output field.
@@ -75,9 +75,9 @@ Query, row decoding, lookahead decoding, cleanup and token-generation errors ret
 
 ## Slices after fetching
 
-Results remain idiomatic Go slices. Sorting a copy in memory is explicit:
-
 Inputs: `page orm.CursorPage[reports.UserSummary]`.
+
+Results remain idiomatic Go slices. Sorting a copy in memory is explicit:
 
 <!-- compiled-source: tests/fixtures/consumer/cursorqueries/guide_recipes.go#result-cursor-pagination-3 -->
 ```go

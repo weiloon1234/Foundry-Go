@@ -110,5 +110,4 @@ any response headers they modify afterward.
 The [Fetch Standard](https://fetch.spec.whatwg.org/#http-cors-protocol) owns browser
 CORS behavior. Foundry's bounded declarations and explicit middleware ordering
 are framework choices; client contract generation does not infer authentication
-from these sharing settings. The HTTP blueprint
-records the delivered transport policies and milestone acceptance.
+from these sharing settings.

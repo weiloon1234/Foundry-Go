@@ -165,14 +165,14 @@ path and rotation options are rejected for syslog sinks.
 
 ## Custom handlers
 
+These recipes need no application model; the transport and helper types they use are declared or described on this page.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `attribution`, `logging`.
+
 There is no application option that preserves the removed custom-handler
 option's behavior. To keep channel level filtering and delivery counters, use
 `logging.WithHandler` in direct `logging.PrepareChannels` assembly. Declare the
 channel and its minimum level, and pass `nil` for the borrowed default logger:
-
-These recipes need no application model; the transport and helper types they use are declared or described on this page.
-
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `attribution`, `logging`.
 
 <!-- compiled-source: tests/fixtures/consumer/tooling/guide_logging.go#vendor-log-channel -->
 ```go

@@ -93,13 +93,12 @@ or `http=both`. Without `http=`, no helper is emitted. For example,
 retaining the response role's validation behavior. See [staged routes](flat-routes.md#generated-http-pieces)
 for helper names, signatures, collision failures and structural exclusions.
 
-
 ## Strict, typed decoding
+
+Inputs: `ctx context.Context`, `payload []byte`.
 
 The descriptor is immutable and can be reused concurrently. The lower-level
 decoding API accepts an already bounded byte buffer and explicit resource limits:
-
-Inputs: `ctx context.Context`, `payload []byte`.
 
 <!-- compiled-source: tests/fixtures/consumer/httpdto/profile_recipes.go#http-dtos-3 -->
 ```go

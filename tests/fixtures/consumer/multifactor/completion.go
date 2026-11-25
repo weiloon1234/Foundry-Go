@@ -25,9 +25,8 @@ func CompleteSession(ctx context.Context, factors *mfa.Factors[Account, model.ID
 	if err != nil {
 		return session.Issued[Account, model.ID[Account]]{}, err
 	}
-	issued, err := sessions.CompleteMFA(ctx, pending, factor, session.IssueOptions{})
+	return sessions.CompleteMFA(ctx, pending, factor, session.IssueOptions{})
 	// doc-example:end complete-totp-session
-	return issued, err
 }
 
 // CompleteToken selects options from server login policy. Client payloads do not

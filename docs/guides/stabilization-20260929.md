@@ -33,10 +33,7 @@ The later [B07 handoff recheck](b07-shutdown-recheck-20260929.md) verifies that
 correction against the old shutdown condition and the supplied starter probe.
 
 ## Verification and evidence
-
-The acceptance record contains source
-hashes, exact commands, exit statuses, package integrity, scanner results and
-retained evidence locations. Tests required the existing PostgreSQL and Redis
+Tests required the existing PostgreSQL and Redis
 services and used isolated retained namespaces. No database was reset, and no
 dependencies or tools were installed or upgraded.
 

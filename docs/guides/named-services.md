@@ -205,5 +205,4 @@ a schema must use matching bounds; expiry has database timestamp precision.
 No migration runs at application boot, a PostgreSQL store's startup performs no
 I/O, and no cleanup resets a database or touches unrelated data.
 
-See the independent [configured consumer](../../tests/fixtures/consumer/configured/settings.go)
-and the consumer-startup blueprint.
+See the independent [configured consumer](../../tests/fixtures/consumer/configured/settings.go).

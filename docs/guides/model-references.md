@@ -1,8 +1,6 @@
 # Stored model references and attribution
 
-The master roadmap records completed runtime, PostgreSQL, compiler-rejection, real-gopls and full-repository acceptance.
-
-The model directive generates identity methods from the table and its primary key:
+The model directive generates identity methods from the table and its primary key.
 
 Use `user.FoundryReference()` and `user.FoundryIdentity()`. In the model package,
 reuse the generated `usersIdentity` for `Reference` and `Parse` operations. See

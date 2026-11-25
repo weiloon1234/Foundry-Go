@@ -12,7 +12,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/auth/oauth"
 	"github.com/weiloon1234/Foundry-Go/auth/session"
 	"github.com/weiloon1234/Foundry-Go/clock"
-	"github.com/weiloon1234/Foundry-Go/http"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/httpclient"
 	"github.com/weiloon1234/Foundry-Go/model"
 	"github.com/weiloon1234/Foundry-Go/secret"
@@ -55,7 +55,7 @@ func socialClient(ctx context.Context, google oauth.Provider) (*oauth.Client, *h
 	return client, outbound, nil
 }
 
-func socialLoginRoutes(services application.Services, client *oauth.Client, web *http.BrowserSessions[models.User, model.ID[models.User]], handoffs SocialHandoffs) (*http.Router, error) {
+func socialLoginRoutes(services application.Services, client *oauth.Client, web *foundryhttp.BrowserSessions[models.User, model.ID[models.User]], handoffs SocialHandoffs) (*foundryhttp.Router, error) {
 	// doc-example:begin social-flow-routes
 	encrypter, err := services.CookieEncrypter()
 	if err != nil {
@@ -65,31 +65,31 @@ func socialLoginRoutes(services application.Services, client *oauth.Client, web 
 	if err != nil {
 		return nil, err
 	}
-	cookie := http.DefineCookie("__Host-social-handoff", http.SecretCookie(), http.DefaultCookieOptions())
+	cookie := foundryhttp.DefineCookie("__Host-social-handoff", foundryhttp.SecretCookie(), foundryhttp.DefaultCookieOptions())
 
-	startRoute := http.DefineRoute(http.RouteSpec{ID: "auth.google", Method: http.GET, Access: http.Public}, http.StaticPath("/auth/google"))
-	start := http.HandleRaw(startRoute, func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ http.NoPath) {
+	startRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "auth.google", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/auth/google"))
+	start := foundryhttp.HandleRaw(startRoute, func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ foundryhttp.NoPath) {
 		location, err := flow.Start(r.Context(), w)
 		if err != nil {
-			http.WriteError(w, r, err)
+			foundryhttp.WriteError(w, r, err)
 			return
 		}
 		stdhttp.Redirect(w, r, location, stdhttp.StatusFound)
 	})
-	callbackRoute := http.DefineRoute(http.RouteSpec{ID: "auth.google.callback", Method: http.GET, Access: http.Public}, http.StaticPath("/auth/google/callback"))
-	callback := http.HandleRaw(callbackRoute, func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ http.NoPath) {
+	callbackRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "auth.google.callback", Method: foundryhttp.GET, Access: foundryhttp.Public}, foundryhttp.StaticPath("/auth/google/callback"))
+	callback := foundryhttp.HandleRaw(callbackRoute, func(w stdhttp.ResponseWriter, r *stdhttp.Request, _ foundryhttp.NoPath) {
 		profile, err := flow.Finish(w, r)
 		if err != nil {
-			http.WriteError(w, r, err)
+			foundryhttp.WriteError(w, r, err)
 			return
 		}
 		handoff, err := handoffs.Stage(r.Context(), profile)
 		if err != nil {
-			http.WriteError(w, r, err)
+			foundryhttp.WriteError(w, r, err)
 			return
 		}
 		if err := cookie.Set(r.Context(), w, handoff); err != nil {
-			http.WriteError(w, r, err)
+			foundryhttp.WriteError(w, r, err)
 			return
 		}
 		w.Header().Set("Cache-Control", "no-store")
@@ -97,43 +97,42 @@ func socialLoginRoutes(services application.Services, client *oauth.Client, web 
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		io.WriteString(w, `<form method="post" action="/auth/google/complete"><button>Continue signing in</button></form>`)
 	})
-	capture := http.DefineMiddleware("auth.google.handoff", func(next stdhttp.Handler) (stdhttp.Handler, error) {
+	capture := foundryhttp.DefineMiddleware("auth.google.handoff", func(next stdhttp.Handler) (stdhttp.Handler, error) {
 		return stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 			supplied, err := cookie.Read(r)
 			if err != nil {
-				http.WriteError(w, r, err)
+				foundryhttp.WriteError(w, r, err)
 				return
 			}
 			handoff, present := supplied.Get()
 			if !present {
-				http.WriteError(w, r, auth.Unauthenticated)
+				foundryhttp.WriteError(w, r, auth.Unauthenticated)
 				return
 			}
 			if err := cookie.Clear(w); err != nil {
-				http.WriteError(w, r, err)
+				foundryhttp.WriteError(w, r, err)
 				return
 			}
 			ctx := context.WithValue(r.Context(), socialHandoffContextKey{}, handoff)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		}), nil
 	})
-	completeRoute := http.DefineRoute(http.RouteSpec{ID: "auth.google.complete", Method: http.POST, Access: http.Public}, http.StaticPath("/auth/google/complete"))
-	endpoint := http.DefineEndpoint(completeRoute, http.EmptyQuery(), http.EmptyBody(), http.EmptyResponse(204))
-	complete := http.ConfigureEndpoint(endpoint, http.Use(web.Middleware(), capture)).Handle(func(ctx context.Context, _ http.Input[http.NoPath, http.NoQuery, http.NoBody]) (http.NoContent, error) {
+	completeRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "auth.google.complete", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/auth/google/complete"))
+	endpoint := foundryhttp.DefineEndpoint(completeRoute, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
+	complete := foundryhttp.ConfigureEndpoint(endpoint, foundryhttp.Use(web.Middleware(), capture)).Handle(func(ctx context.Context, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.NoContent, error) {
 		handoff, ok := ctx.Value(socialHandoffContextKey{}).(secret.String)
 		if !ok {
-			return http.NoContent{}, auth.Unauthenticated
+			return foundryhttp.NoContent{}, auth.Unauthenticated
 		}
 		proof, err := handoffs.Consume(ctx, handoff)
 		if err != nil {
-			return http.NoContent{}, err
+			return foundryhttp.NoContent{}, err
 		}
 		_, err = web.Login(ctx, proof, session.IssueOptions{})
-		return http.NoContent{}, err
+		return foundryhttp.NoContent{}, err
 	})
-	router, err := http.NewRouter(start, callback, complete)
+	return foundryhttp.NewRouter(start, callback, complete)
 	// doc-example:end social-flow-routes
-	return router, err
 }
 
 // doc-example:begin social-handoff-state

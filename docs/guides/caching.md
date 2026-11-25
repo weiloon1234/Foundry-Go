@@ -19,13 +19,13 @@ Redis also implements typed tags and [leases](leases.md) with full native accept
 <a id="recipe-typed-cache"></a>
 ## Declare once, bind once
 
-A declaration owns its name, key codec and payload codec. Binding it to an application
-store preserves both Go types through every operation. The [independent consumer](../../tests/fixtures/consumer/caching/profiles.go)
-uses a model-owned ID and explicitly selects a getter when creating a cache snapshot:
-
 In these recipes, `mutatorqueries.Member` is your application model with a typed `ID` and an `AccessEmail() (mutatorqueries.DisplayEmail, error)` accessor; `mutatorqueries.DisplayEmail` is its string-backed presentation value.
 
 Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `cache`, `clock`, `keyspace`, `cache/memory`, `model`.
+
+A declaration owns its name, key codec and payload codec. Binding it to an application
+store preserves both Go types through every operation. The [independent consumer](../../tests/fixtures/consumer/caching/profiles.go)
+uses a model-owned ID and explicitly selects a getter when creating a cache snapshot:
 
 <!-- compiled-source: tests/fixtures/consumer/caching/profiles.go#typed-cache -->
 ```go
@@ -296,10 +296,10 @@ capability and passed real-service and full native acceptance.
 
 ## Existence, expiry and batch removal
 
+Inputs: `ctx context.Context`, `profiles Profiles`, `memberID model.ID[mutatorqueries.Member]`, `memberA model.ID[mutatorqueries.Member]`, `memberB model.ID[mutatorqueries.Member]`.
+
 The [compiling consumer](../../tests/fixtures/consumer/caching/entries.go) keeps its
 model-owned keys through these operations:
-
-Inputs: `ctx context.Context`, `profiles Profiles`, `memberID model.ID[mutatorqueries.Member]`, `memberA model.ID[mutatorqueries.Member]`, `memberB model.ID[mutatorqueries.Member]`.
 
 <!-- compiled-source: tests/fixtures/consumer/caching/guide_operations.go#caching-2 -->
 ```go
@@ -464,10 +464,10 @@ and atomic conditional publication.
 
 ### Stale-while-revalidate with Flexible
 
+Inputs: `ctx context.Context`, `profiles Profiles`, `memberID model.ID[mutatorqueries.Member]`, `loadProfile func(context.Context) (Profile, error)`.
+
 `Flexible(ctx, key, fresh, stale, loader, options...)` is `Remember` that keeps
 serving an aging value while it is refreshed:
-
-Inputs: `ctx context.Context`, `profiles Profiles`, `memberID model.ID[mutatorqueries.Member]`, `loadProfile func(context.Context) (Profile, error)`.
 
 <!-- compiled-source: tests/fixtures/consumer/caching/guide_operations.go#caching-4 -->
 ```go
@@ -635,12 +635,10 @@ compiler tests reject wrong ID owners, payloads, TTLs, codecs, raw backend keys 
 raw values assigned to getter-specific fields. Counter cases also reject unrelated
 model IDs, floating-point deltas and string values. An arbitrary-precision fuzz
 oracle checks exact arithmetic and overflow boundaries. Actual gopls probes check the bound
-model/value signatures and definitions. The master roadmap owns acceptance status and the historical verification records.
+model/value signatures and definitions.
 
 The typed-cache/memory and Remember slices passed full native macOS verification,
-including local PostgreSQL and the complete consumer/compiler/editor checks. See
-the roadmap
-for acceptance evidence. The [Redis adapter](redis.md) now implements connection ownership, ordinary cache operations and counters; full native acceptance passed. Redis tags and leases passed full native acceptance. Distributed Remember, rate limiting and pub/sub also passed full native acceptance. Namespace invalidation, [typed Redis data](redis-data.md) and [raw commands](redis-commands.md) also passed full native acceptance.
+including local PostgreSQL and the complete consumer/compiler/editor checks. The [Redis adapter](redis.md) now implements connection ownership, ordinary cache operations and counters; full native acceptance passed. Redis tags and leases passed full native acceptance. Distributed Remember, rate limiting and pub/sub also passed full native acceptance. Namespace invalidation, [typed Redis data](redis-data.md) and [raw commands](redis-commands.md) also passed full native acceptance.
 
 Typed counters
 also passed the full native gate and focused race, compiler, editor and arithmetic

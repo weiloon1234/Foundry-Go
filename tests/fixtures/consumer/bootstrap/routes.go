@@ -6,7 +6,7 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/application"
 	"github.com/weiloon1234/Foundry-Go/cache"
-	"github.com/weiloon1234/Foundry-Go/http"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/imaging"
 	"github.com/weiloon1234/Foundry-Go/keyspace"
 	"github.com/weiloon1234/Foundry-Go/storage"
@@ -24,7 +24,7 @@ type Profile struct {
 // doc-example:end profile-response
 
 //foundry:multipart http=body
-type UploadInput struct{ Image http.UploadedFile }
+type UploadInput struct{ Image foundryhttp.UploadedFile }
 
 //foundry:dto http=response
 type UploadResult struct {
@@ -41,14 +41,14 @@ var avatar = imaging.NewPlan().
 	Contain(32, 32, color.NRGBA{R: 255, G: 255, B: 255, A: 255}, imaging.Center).
 	Format(imaging.PNG)
 
-type MemberProfileInput = http.Input[http.NoPath, http.NoQuery, http.NoBody]
+type MemberProfileInput = foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]
 
-func profileEndpoint(id http.RouteID, path string, method http.Method) http.Endpoint[http.NoPath, http.NoQuery, http.NoBody, Profile] {
-	idRoute := http.DefineRoute(http.RouteSpec{ID: id, Method: method, Access: http.Guarded}, http.StaticPath(path))
+func profileEndpoint(id foundryhttp.RouteID, path string, method foundryhttp.Method) foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, Profile] {
+	idRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: id, Method: method, Access: foundryhttp.Guarded}, foundryhttp.StaticPath(path))
 
-	return http.DefineEndpoint(idRoute, http.EmptyQuery(), http.EmptyBody(), ProfileResponse(200))
+	return foundryhttp.DefineEndpoint(idRoute, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), ProfileResponse(200))
 }
-func Routes(settings Settings, services application.Services) ([]http.RouteRegistration, error) {
+func Routes(settings Settings, services application.Services) ([]foundryhttp.RouteRegistration, error) {
 	db, err := services.Database()
 	if err != nil {
 		return nil, err
@@ -74,25 +74,25 @@ func Routes(settings Settings, services application.Services) ([]http.RouteRegis
 		return nil, err
 	}
 
-	bootstrapMemberEndpoint := profileEndpoint("bootstrap.member", "/api/member", http.GET)
+	bootstrapMemberEndpoint := profileEndpoint("bootstrap.member", "/api/member", foundryhttp.GET)
 
-	member := http.Authenticated(bootstrapMemberEndpoint, members).Handle(func(ctx context.Context, actor Member, _ MemberProfileInput) (Profile, error) {
+	member := foundryhttp.Authenticated(bootstrapMemberEndpoint, members).Handle(func(ctx context.Context, actor Member, _ MemberProfileInput) (Profile, error) {
 		return cached.Remember(ctx, actor.ID.String(), cache.Forever(), func(context.Context) (Profile, error) {
 			return Profile{Name: settings.Greeting + " " + actor.Name, Kind: "member"}, nil
 		})
 	})
 
-	bootstrapOperatorEndpoint := profileEndpoint("bootstrap.operator", "/api/operator", http.POST)
+	bootstrapOperatorEndpoint := profileEndpoint("bootstrap.operator", "/api/operator", foundryhttp.POST)
 
-	operator := http.Authenticated(bootstrapOperatorEndpoint, operators).Handle(func(_ context.Context, actor Operator, _ MemberProfileInput) (Profile, error) {
+	operator := foundryhttp.Authenticated(bootstrapOperatorEndpoint, operators).Handle(func(_ context.Context, actor Operator, _ MemberProfileInput) (Profile, error) {
 		return Profile{Name: actor.Department, Kind: "operator"}, nil
 	})
 
-	bootstrapAvatarRoute := http.DefineRoute(http.RouteSpec{ID: "bootstrap.avatar", Method: http.POST, Access: http.Guarded}, http.StaticPath("/api/avatar"))
-	upload := http.DefineEndpoint(bootstrapAvatarRoute, http.EmptyQuery(), UploadInputBody(""), UploadResultResponse(201))
-	upload = http.ValidateBody(upload, validation.Rules(UploadInputValidationFields().Image, validation.FileMaxSize[http.UploadedFile](1<<20), validation.FileContentTypes[http.UploadedFile]("image/png")))
+	bootstrapAvatarRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "bootstrap.avatar", Method: foundryhttp.POST, Access: foundryhttp.Guarded}, foundryhttp.StaticPath("/api/avatar"))
+	upload := foundryhttp.DefineEndpoint(bootstrapAvatarRoute, foundryhttp.EmptyQuery(), UploadInputBody(""), UploadResultResponse(201))
+	upload = foundryhttp.ValidateBody(upload, validation.Rules(UploadInputValidationFields().Image, validation.FileMaxSize[foundryhttp.UploadedFile](1<<20), validation.FileContentTypes[foundryhttp.UploadedFile]("image/png")))
 
-	saved := http.Authenticated(upload, members).Handle(func(ctx context.Context, actor Member, input http.Input[http.NoPath, http.NoQuery, UploadInput]) (UploadResult, error) {
+	saved := foundryhttp.Authenticated(upload, members).Handle(func(ctx context.Context, actor Member, input foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, UploadInput]) (UploadResult, error) {
 		reader, err := input.Body.Image.Open(ctx)
 		if err != nil {
 			return UploadResult{}, err
@@ -111,7 +111,7 @@ func Routes(settings Settings, services application.Services) ([]http.RouteRegis
 		}
 		return UploadResult{Key: key, Bytes: result.Size(), Width: result.Info().Width}, nil
 	})
-	return []http.RouteRegistration{
+	return []foundryhttp.RouteRegistration{
 		member,
 		operator,
 		saved,

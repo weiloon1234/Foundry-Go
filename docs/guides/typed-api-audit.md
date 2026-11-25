@@ -4,8 +4,7 @@ T07 reviews the T01–T06 changed implementation and its complete consumer workf
 The initial native `make verify` gate passed before the review. The grouped fixes
 below passed focused native race and real-client checks, independent packaged
 consumers and controlled measurements. Eight bounded fuzz targets passed; the final
-full gate passed in 633.4 seconds. The acceptance record
-contains commands, review notes, samples, boundaries and resulting source hashes.
+full gate passed in 633.4 seconds.
 
 ## Review coverage
 
@@ -53,6 +52,5 @@ T07 additionally proves complete-workflow replay from a fresh process.
    null, empty, zero and replacement cases cover the behavior.
 
 No new dependency or duplicate framework subsystem was introduced by these fixes.
-The [workflow guide](typed-api-workflow.md) explains the public consumer path;
-status and final evidence belong to the
-master.
+The [workflow guide](typed-api-workflow.md) explains the public consumer path.
+

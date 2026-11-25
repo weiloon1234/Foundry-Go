@@ -2,12 +2,7 @@
 
 Typed session/token revocation and checked password-proof issuance share the caller's model transaction and preserve guard/provider ownership.
 
-Milestone 10 passed native acceptance. See the master roadmap for verification evidence and later integration boundaries.
-
 ## Register the credential guards once for invalidation
-
-Bind sessions and tokens to the same `auth.Provider[M,K]` declaration used by
-password login and recovery. Each binding contributes a typed revocation action:
 
 The application owns `Member` and any generated tables or identities used below.
 
@@ -15,10 +10,14 @@ Framework imports from `github.com/weiloon1234/Foundry-Go`: `auth`, `database`, 
 
 Inputs: `users auth.Provider[Member, model.ID[Member]]`, `sessions *session.Sessions[Member, model.ID[Member]]`, `tokens *token.Tokens[Member, model.ID[Member]]`.
 
+Bind sessions and tokens to the same `auth.Provider[M,K]` declaration used by
+password login and recovery. Each binding contributes a typed revocation action:
+
 <!-- compiled-source: tests/fixtures/consumer/recovering/credentials.go#credential-revocations -->
 ```go
 web, err := sessions.Revocation()
 if err != nil {
+	// The session backend must support joining a transaction.
 	return nil, err
 }
 api, err := tokens.Revocation()
@@ -26,6 +25,7 @@ if err != nil {
 	return nil, err
 }
 revocations, err := auth.NewRevocations(users, web, api)
+// Pass revocations.Invalidate as the reset model's Invalidate callback.
 ```
 
 The [consumer composition](../../tests/fixtures/consumer/recovering/credentials.go)
@@ -85,7 +85,7 @@ if err != nil {
 	return session.Issued[Member, model.ID[Member]]{}, err
 }
 // Select the required pending or full assurance flow before issuance.
-issued, err := sessions.Issue(ctx, result.Proof(), session.IssueOptions{})
+return sessions.Issue(ctx, result.Proof(), session.IssueOptions{})
 ```
 
 Do not rebuild a password proof with `auth.NewProof(identity.ReferenceOf(result.Subject()),

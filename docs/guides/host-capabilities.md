@@ -1227,9 +1227,9 @@ and deployment digest, plus schema-1 role bindings. Do not write or discover thi
 file yourself. It is invocation-specific; private HTTP allocation is selected
 with the journaled effective environment, not guessed from the profile.
 
-This consumer fixture loads the three HTTP-role bindings from the worked example:
-
 Framework imports from `github.com/weiloon1234/Foundry-Go`: `deployment`, `fault`.
+
+This consumer fixture loads the three HTTP-role bindings from the worked example:
 
 <!-- compiled-source: tests/fixtures/consumer/hostcapabilities/bindings.go#host-capability-bindings -->
 ```go
@@ -1541,8 +1541,6 @@ matching random hostname. It never resets the zone. The container feature scenar
 also invokes `tests/acceptance_dns.py` against the controlled loopback provider.
 Ordinary application rehearsal continues to use external local DNS.
 
-The Managed DNS live certification
-records the 2026-11-15 test-zone results and reproduction command.
 ### Select and inspect numbered copies
 
 For a placed numbered role, `ROLE=relay` selects every copy. Add `COPY=2` to
@@ -1793,8 +1791,7 @@ reduced fidelity. Production R2 behavior is unaffected.
 Without the opt-in, rehearsal refuses any bound disk that declares multipart
 conditions before creating containers. The error names the disk, the listing
 conformance gap, and the exact opt-in to add. A future stand-in upgrade must pass
-the certification before the opt-in can be removed. See the
-stand-in certification evidence and command.
+the certification before the opt-in can be removed.
 
 To accept reduced fidelity for specific disks, add this optional field to the
 private rehearsal binding file:
@@ -2045,11 +2042,11 @@ takes the directory as a positional argument, add
 These are literal paths, with no shell expansion. OBS does not interpret the
 Foundry reference itself. The wrapper supplies the resolved file path to OBS.
 
+These recipes need no application model; the transport and helper types they use are declared or described on this page.
+
 One application binary runs HTTP, worker, scheduler, and console processes.
 Load bindings once during assembly and register the media preparation handler
 only when this process holds the grant. For example:
-
-These recipes need no application model; the transport and helper types they use are declared or described on this page.
 
 <!-- compiled-source: tests/fixtures/consumer/hostcapabilities/guide_workers.go#media-preparation-cache -->
 ```go

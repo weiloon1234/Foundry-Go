@@ -1,8 +1,6 @@
 # Countries
 
-Milestone 18 passed native verification and consumer review. The
-master evidence
-records the checks and operational limits.
+Milestone 18 passed native verification and consumer review.
 
 `countries.Country` is a directive-declared ORM model with the typed
 natural primary key `countries.Code`. Reference data is installed only through an

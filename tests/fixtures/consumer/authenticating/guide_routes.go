@@ -33,7 +33,7 @@ func TokenBinding(tokens *UserTokens) (foundryhttp.GuardBinding[models.User], er
 // doc-example:end bind-token-guard
 
 // doc-example:begin configure-bound-scopes
-func securedProfile(endpoint foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.NoContent], binding foundryhttp.GuardBinding[models.User], scopes auth.AccessScopes[models.User], viewAccount auth.Permission[models.User]) foundryhttp.AuthenticatedEndpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User, foundryhttp.NoContent] {
+func securedProfile(endpoint foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.NoContent], binding foundryhttp.GuardBinding[models.User], scopes auth.AccessScopes[models.User], viewAccount auth.Permission[models.User]) ProfileEndpoint {
 	return foundryhttp.Authenticated(endpoint, binding, foundryhttp.Scopes(scopes), foundryhttp.Permissions(viewAccount))
 }
 

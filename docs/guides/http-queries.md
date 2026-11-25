@@ -47,7 +47,7 @@ if err != nil {
 // input.User retains model.ID[models.User].
 // input.Search distinguishes omission from an explicitly empty string.
 // input.Statuses is an ordinary []models.Status.
-encoded, err := foundryhttp.EncodeQuery(parameters, ctx, input, limits)
+return foundryhttp.EncodeQuery(parameters, ctx, input, limits)
 ```
 
 Here `model`, `value` and `foundryhttp` are framework imports; `models` is the

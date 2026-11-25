@@ -2,8 +2,7 @@
 
 Framework implementation accepted on 2026-09-28. The final `make verify` gate and
 runtime/consumer race checks passed on identical source snapshots, with PostgreSQL,
-Redis, TypeScript and real gopls required for their applicable checks. See the
-verification record.
+Redis, TypeScript and real gopls required for their applicable checks.
 
 These changes are local and unpublished. The repository owner must make this
 revision available before the boilerplate pins it. A temporary local Go module

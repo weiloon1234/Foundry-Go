@@ -21,11 +21,11 @@ column's `Clear()` writes SQL NULL. Migrations must supply the physical JSONB ty
 
 Declare reusable field bindings beside the columns:
 
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/jsonqueries/tables.go):
-
 `Preferences` is your JSON payload struct with a `Profile value.Optional[Profile]` field tagged `json:"profile,omitzero"`; its nested `Profile` has `Name string` tagged `json:"name"` and `Age int64` tagged `json:"age,string"`.
 
 Framework imports from `github.com/weiloon1234/Foundry-Go`: `database/codec`, `database/orm/expr`, `database/orm`, `database/orm/rows`, `value`.
+
+[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/jsonqueries/tables.go):
 
 <!-- compiled-source: tests/fixtures/consumer/jsonqueries/tables.go#json-models -->
 ```go
@@ -121,7 +121,6 @@ matching. Map keys, indices and compared values remain parameters. The final
 scalar property uses `->>` and its scalar cast; index that same expression.
 Containment uses `@>` and can use an appropriate JSONB GIN index. Inspect actual
 SQL and [plans](query-plans.md) before choosing an index.
-
 
 ### Startup validation
 

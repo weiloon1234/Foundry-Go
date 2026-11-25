@@ -5,8 +5,6 @@ stored references come from the application's declarations and `foundry generate
 
 PostgreSQL-backed hashed personal and renewable tokens retain model-owned IDs, bounded lifetimes and immutable scope ceilings. Refresh rotation detects reuse and invalidates the family.
 
-Milestone 10 passed native acceptance. See the master roadmap for verification evidence and later integration boundaries.
-
 <a id="agent-entry"></a>
 ## Agent entry
 
@@ -506,11 +504,11 @@ prune a live successor. The expiry predicate is rechecked on each locked family;
 families locked by a concurrent refresh or revocation are skipped. Small subject
 lock rows remain after family deletion to avoid races with new issuance.
 
+Inputs: `calendar schedule.Calendar`, `api *UserTokens`.
+
 `PruneExpired(ctx, batch, maxBatches)` prunes in batches until a short batch or
 `maxBatches`, honoring cancellation, and reports the removed families. Call it
 from a scheduler handler:
-
-Inputs: `calendar schedule.Calendar`, `api *UserTokens`.
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/pruning_recipes.go#prune-tokens-hourly -->
 ```go
@@ -524,7 +522,6 @@ Configured applications can instead return `application.PruneTokens(guard)` in
 `FeatureDeclarations.Pruning` to let the [housekeeping schedule](production-operations.md#housekeeping-schedule) prune each guard.
 
 These behaviors passed the milestone tests and consumer review.
-
 
 ## Credential changes and checked issuance
 

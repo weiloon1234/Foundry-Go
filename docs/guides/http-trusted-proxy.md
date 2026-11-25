@@ -1,14 +1,14 @@
 # Trusted proxy client addresses
 
-The HTTP kernel initially attributes a request to its socket peer. Apply
-`TrustedProxy` through [global middleware](http-middleware.md) before rate limits,
-guards or domain services consume client attribution:
-
 These recipes need no application model; the transport and helper types they use are declared or described on this page.
 
 Framework imports from `github.com/weiloon1234/Foundry-Go`: `http` as `foundryhttp`.
 
 Inputs: `router http.Handler`.
+
+The HTTP kernel initially attributes a request to its socket peer. Apply
+`TrustedProxy` through [global middleware](http-middleware.md) before rate limits,
+guards or domain services consume client attribution:
 
 <!-- compiled-source: tests/fixtures/consumer/httpproxy/http_trusted_proxy_recipes.go#http-trusted-proxy-1 -->
 ```go
@@ -67,7 +67,7 @@ Inputs: `ctx context.Context`.
 
 <!-- compiled-source: tests/fixtures/consumer/httpproxy/http_trusted_proxy_recipes.go#http-trusted-proxy-2 -->
 ```go
-client := foundryhttp.ClientIP(ctx) // netip.Addr from the service's context
+return foundryhttp.ClientIP(ctx) // netip.Addr from the service's context
 ```
 
 The [compiling consumer](../../tests/fixtures/consumer/httpproxy/router_test.go)
@@ -106,4 +106,3 @@ This preserves Rust Foundry's configurable header sources while changing its
 default CDN trust and leftmost-XFF selection to explicit peers and chain-aware
 resolution. Protocol references are [RFC 7239](https://www.rfc-editor.org/rfc/rfc7239.html)
 and Go's [proxy forwarding documentation](https://pkg.go.dev/net/http/httputil#ProxyRequest.SetXForwarded).
-The HTTP blueprint records current milestone acceptance.

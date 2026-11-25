@@ -60,8 +60,7 @@ is an execution check only; final performance conclusions require the isolated,
 repeated native candidate measurements.
 
 Final gate, source hashes, packaged consumer and security results are recorded
-in the [acceptance guide](consumer-startup-acceptance.md) and
-acceptance evidence. Both packaged serve
+in the [acceptance guide](consumer-startup-acceptance.md). Both packaged serve
 commands also answered HTTP and exited successfully on SIGINT using a two-second
 configured shutdown timeout. No source was committed,
 pushed, merged or published as part of this work.

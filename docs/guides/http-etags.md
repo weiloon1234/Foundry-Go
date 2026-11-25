@@ -1,12 +1,12 @@
 # Automatic ETags
 
-Use `ETags(DefaultETagConfig())` through ordinary middleware assembly:
-
 These recipes need no application model; the transport and helper types they use are declared or described on this page.
 
 Framework imports from `github.com/weiloon1234/Foundry-Go`: `http` as `foundryhttp`, `value`.
 
 Inputs: `router http.Handler`.
+
+Use `ETags(DefaultETagConfig())` through ordinary middleware assembly:
 
 <!-- compiled-source: tests/fixtures/consumer/httpetags/http_etags_recipes.go#http-etags-1 -->
 ```go
@@ -71,10 +71,10 @@ reading the complete body; automatic hashing requires producing the bytes.
 
 ## Cache-Control policy
 
+Inputs: `router http.Handler`.
+
 `CacheControl(policy)` declares a typed `Cache-Control` for GET and HEAD
 responses and composes with ETags, so clients revalidate cheaply with 304:
-
-Inputs: `router http.Handler`.
 
 <!-- compiled-source: tests/fixtures/consumer/httpetags/http_etags_recipes.go#http-etags-2 -->
 ```go

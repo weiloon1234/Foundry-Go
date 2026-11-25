@@ -6,8 +6,6 @@ findings and evidence below preserve what was true at the original review.
 
 Foundry-Go has **one confirmed cookie-response cache-safety gap** in the reviewed paths. Four additional priorities depend on release and application requirements. They are separated below from vulnerabilities and from capabilities already delivered. This is a review record; runtime behavior has not been changed.
 
-The evidence record contains the reproducible probe source, scanner findings, commands, test results, source fingerprints and limitations.
-
 ## S01 — cookie-authenticated responses lack a safe cache default (P2)
 
 [NewCookieAuthentication](../../http/guard_binding.go) installs origin/CSRF protection, but its [shared authentication middleware](../../http/authentication.go) does not set a response cache policy. The separate [BrowserSessions wrapper](../../http/browser_sessions.go) already sets `Cache-Control: no-store`. The [bootstrap consumer](../../tests/fixtures/consumer/bootstrap/auth.go) demonstrates the affected cookie-authentication entry point.

@@ -11,11 +11,11 @@ including 721 compiler cases, 271 editor probes and current generated output.
 
 The application owns `models.User` and any generated tables or identities used below.
 
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `auth`, `http`, `model`, `auth/session`.
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `auth`, `http` as `foundryhttp`, `model`, `auth/session`.
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/browser_recipes.go#browser-session-type -->
 ```go
-type UserBrowserSessions = http.BrowserSessions[models.User, model.ID[models.User]]
+type UserBrowserSessions = foundryhttp.BrowserSessions[models.User, model.ID[models.User]]
 ```
 
 Inputs: `sessions *session.Sessions[models.User, model.ID[models.User]]`.
@@ -26,7 +26,7 @@ registry, err := auth.NewRegistry(auth.DefaultConfig(), sessions.Guard().Registr
 if err != nil {
 	return nil, err
 }
-web, err := http.NewBrowserSessions(registry, sessions, http.DefaultBrowserSessionConfig())
+return foundryhttp.NewBrowserSessions(registry, sessions, foundryhttp.DefaultBrowserSessionConfig())
 ```
 
 `sessions` is the existing `*session.Sessions[User, model.ID[User]]` (or the model's
@@ -55,21 +55,21 @@ one request binding. A different browser adapter cannot reuse that binding.
 
 Inside a public typed login handler, after trusted credential verification:
 
-The verifier must authenticate the submitted credentials or consume an application-owned browser-bound handoff. Credential issuance happens in this typed POST handler:
-
 Inputs: `web *UserBrowserSessions`, `verify func(context.Context) (auth.Proof[models.User, model.ID[models.User]], error)`.
+
+The verifier must authenticate the submitted credentials or consume an application-owned browser-bound handoff. Credential issuance happens in this typed POST handler:
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/browser_recipes.go#typed-browser-login -->
 ```go
-route := http.DefineRoute(http.RouteSpec{ID: "browser.login", Method: http.POST, Access: http.Public}, http.StaticPath("/login"))
-endpoint := http.DefineEndpoint(route, http.EmptyQuery(), http.EmptyBody(), http.EmptyResponse(204))
-registration := http.ConfigureEndpoint(endpoint, http.Use(web.Middleware())).Handle(func(ctx context.Context, _ http.Input[http.NoPath, http.NoQuery, http.NoBody]) (http.NoContent, error) {
+route := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "browser.login", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/login"))
+endpoint := foundryhttp.DefineEndpoint(route, foundryhttp.EmptyQuery(), foundryhttp.EmptyBody(), foundryhttp.EmptyResponse(204))
+registration := foundryhttp.ConfigureEndpoint(endpoint, foundryhttp.Use(web.Middleware())).Handle(func(ctx context.Context, _ foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody]) (foundryhttp.NoContent, error) {
 	proof, err := verify(ctx)
 	if err != nil {
-		return http.NoContent{}, err
+		return foundryhttp.NoContent{}, err
 	}
 	_, err = web.Login(ctx, proof, session.IssueOptions{Remember: true})
-	return http.NoContent{}, err
+	return foundryhttp.NoContent{}, err
 })
 ```
 
@@ -117,6 +117,8 @@ secret while preserving the session identity and absolute deadline. `Logout`
 revokes the credential before staging an exact-scope cookie removal. Missing
 credentials may still be logged out; malformed cookie input is rejected earlier.
 
+Inputs: `endpoint http.Endpoint[http.NoPath, http.NoQuery, http.NoBody, http.NoContent]`, `browser *UserBrowserSessions`.
+
 Sensitive routes can require a recent password confirmation on the current
 session. A confirmation route re-verifies the password with
 `login.Confirm(ctx, user, password)` and then calls `sessions.ConfirmCurrent(ctx)`.
@@ -127,12 +129,10 @@ brute-force the password there: configure the login with
 (a locked subject gets 429 before any hashing), and add an HTTP rate limit.
 Protected routes add the actor-stage middleware:
 
-Inputs: `endpoint http.Endpoint[http.NoPath, http.NoQuery, http.NoBody, http.NoContent]`, `browser *UserBrowserSessions`.
-
 <!-- compiled-source: tests/fixtures/consumer/authenticating/browser_recipes.go#confirm-password-route -->
 ```go
-route := http.RequireAuthentication(endpoint, browser.Authentication(), browser.Guard(),
-	http.ActorMiddleware[models.User](browser.RequirePasswordConfirmation(15*time.Minute)))
+route := foundryhttp.RequireAuthentication(endpoint, browser.Authentication(), browser.Guard(),
+	foundryhttp.ActorMiddleware[models.User](browser.RequirePasswordConfirmation(15*time.Minute)))
 ```
 
 Without a confirmation within the window, checked against the session store's

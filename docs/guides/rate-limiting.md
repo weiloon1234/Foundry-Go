@@ -7,14 +7,14 @@ single-process use. Neither becomes a fallback for the other.
 
 ## Declare and bind
 
-The [independent consumer](../../tests/fixtures/consumer/limiting/members.go)
-contains compiling examples. A declaration retains its exact key type:
-
 `Member` is the application's model, with an `ID` of type `model.ID[Member]`.
 
 The application owns `Member` and any generated tables or identities used below.
 
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `http` as `foundryhttp`, `keyspace`, `model`, `ratelimit`.
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `http` as `foundryhttp`, `keyspace`, `model`, `ratelimit`. Standard-library aliases: `net/http` as `stdhttp`.
+
+The [independent consumer](../../tests/fixtures/consumer/limiting/members.go)
+contains compiling examples. A declaration retains its exact key type:
 
 <!-- compiled-source: tests/fixtures/consumer/limiting/members.go#member-limit-declaration -->
 ```go
@@ -101,22 +101,11 @@ Inputs: `ctx context.Context`, `limiter ratelimit.Limiter[model.ID[Member]]`, `m
 
 <!-- compiled-source: tests/fixtures/consumer/limiting/guide_recipes.go#inspect-member-quota -->
 ```go
-decision, err := limiter.Peek(ctx, member.ID, 5)
-if err != nil {
-	return decision, 0, 0, false, err
-}
-remaining, err := limiter.Remaining(ctx, member.ID)
-if err != nil {
-	return decision, 0, 0, false, err
-}
-wait, err := limiter.AvailableIn(ctx, member.ID, 5)
-if err != nil {
-	return decision, remaining, 0, false, err
-}
-cleared, err := limiter.Clear(ctx, member.ID)
-if err != nil {
-	return decision, remaining, wait, false, err
-}
+// Check err after each call.
+decision, err := limiter.Peek(ctx, member.ID, 5)    // non-consuming Decision
+remaining, err := limiter.Remaining(ctx, member.ID) // uint32
+wait, err := limiter.AvailableIn(ctx, member.ID, 5) // time.Duration, 0 if it fits now
+cleared, err := limiter.Clear(ctx, member.ID)       // bool
 decision, err = limiter.Attempt(ctx, member.ID, 1, func(ctx context.Context) error {
 	return sendVerification(ctx, member)
 })
@@ -149,7 +138,7 @@ Inputs: `limiter ratelimit.Limiter[model.ID[Member]]`, `currentMemberID func(con
 <!-- compiled-source: tests/fixtures/consumer/limiting/guide_recipes.go#member-rate-middleware -->
 ```go
 middleware := foundryhttp.RateLimit(limiter,
-	func(r *http.Request) (model.ID[Member], error) {
+	func(r *stdhttp.Request) (model.ID[Member], error) {
 		return currentMemberID(r.Context())
 	},
 )
@@ -257,4 +246,4 @@ concurrency, policy conflicts, cancellation and independent resources. Additiona
 tests cover window boundaries, namespaces, corrupt state, callback ownership,
 uncertain acknowledgements, HTTP behavior, wrong Go types and real gopls discovery.
 Full native verification passed in 465.6s with 1984 matching source inputs, required local PostgreSQL and Redis, all 670 compiler cases, 245 consumer editor scenarios plus five field-documentation scenarios, root/consumer tests, vet/formatting, three generation-freshness targets and documentation checks. Fresh focused rate-limit/Redis/HTTP races, consumer races, five new compiler rejections, two actual gopls probes and 2,861,333 timestamp fuzz executions also passed. No dependency was added.
-See the acceptance record. [Pub/sub](pubsub.md) and [authenticated actor quotas](authentication.md#middleware-after-authentication) are delivered integrations.
+[Pub/sub](pubsub.md) and [authenticated actor quotas](authentication.md#middleware-after-authentication) are delivered integrations.

@@ -4,9 +4,7 @@
 
 Foundry-Go is a library/framework repository. Applications consume its public packages. The nested [consumer fixture](../../tests/fixtures/consumer/README.md) checks that external module boundary; it is not the future starter project.
 
-For milestone work, read the blueprint index and
-master roadmap. Foundry-Go
-source, public contracts and executable consumers are the implementation authority.
+Foundry-Go source, public contracts and executable consumers are the implementation authority.
 Inspect the relevant implementation and closest consumer before changing an API.
 Historical cross-repository mappings do not authorize consulting sibling projects.
 

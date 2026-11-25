@@ -2,8 +2,6 @@
 
 Typed failed-attempt policies use atomic Redis or an explicit local authority. Password and MFA throttles remain separate from HTTP request-rate limits.
 
-Milestone 10 passed native acceptance. See the master roadmap for verification evidence and later integration boundaries.
-
 <a id="agent-entry"></a>
 ## Agent entry
 
@@ -13,7 +11,7 @@ Milestone 10 passed native acceptance. See the master roadmap for verification e
 <a id="recipe-password-lockout"></a>
 ## Configure the account's login policy
 
-The application owns `Account` and any generated tables or identities used below.
+The application owns `PasswordAccount`, the model a password login authenticates, and `Account`, the model an MFA stage verifies (they may be one model), plus any generated tables or identities used below.
 
 Framework imports from `github.com/weiloon1234/Foundry-Go`: `auth`, `foundation`, `keyspace`, `auth/lockout`, `auth/mfa`, `model`, `redis`.
 
@@ -114,9 +112,9 @@ not a hard cap on in-flight hashing: combine the existing `http.RateLimitByIP`
 hasher's capacity bound. Password successes and account resets never clear those
 request quotas. The consumer test covers this composition.
 
-For another credential stage, such as MFA, the public typed operation is:
-
 Inputs: `ctx context.Context`, `throttle lockout.Throttle[model.ID[Account]]`, `key model.ID[Account]`, `submittedCode mfa.TOTPCode`, `verifyFactor func(context.Context, mfa.TOTPCode) (bool, error)`.
+
+For another credential stage, such as MFA, the public typed operation is:
 
 <!-- compiled-source: tests/fixtures/consumer/multifactor/lockout_recipes.go#throttle-factor-check -->
 ```go

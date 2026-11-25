@@ -11,6 +11,7 @@ import (
 
 func hashAndCheck(ctx context.Context, submittedPassword string) (bool, error) {
 	// doc-example:begin hash-and-check
+	// Share one hasher across login and reset operations.
 	hasher, err := password.New(password.DefaultConfig())
 	if err != nil {
 		return false, err
@@ -25,8 +26,12 @@ func hashAndCheck(ctx context.Context, submittedPassword string) (bool, error) {
 		return false, err
 	}
 	matches, err := hasher.Check(ctx, plain, stored)
+	if err != nil {
+		return false, err
+	}
+	// Construct an authenticated proof only when matches is true.
+	return matches, nil
 	// doc-example:end hash-and-check
-	return matches, err
 }
 
 func passwordResult(ctx context.Context, login *auth.PasswordLogin[Account, model.ID[Account], string], email string, request LoginRequest) (Account, auth.Proof[Account, model.ID[Account]], error) {

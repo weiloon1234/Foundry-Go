@@ -37,11 +37,12 @@ func enabledAdmins() rows.Scalar[Admin, bool] {
 		expr.Constant[Admin](codec.Bool[bool](), true)).Else(expr.Constant[Admin](codec.Bool[bool](), false))
 	return rows.SelectScalar(rows.From(Admins.Query()), expr.AsSelected(enabled))
 }
-func scopedUsername() {
-	type adminScope struct{}
+
+type adminScope struct{}
+
+func scopedUsername() expr.RowExpression[rows.Alias[adminScope, Admin], string] {
 	source := rows.As[adminScope](Admins.Query(), "admin")
-	parameter := expr.ParamOf(expr.Row(expr.At(rows.Scope(source), Admins.Username)), "Ada")
-	_ = parameter
+	return expr.ParamOf(expr.Row(expr.At(rows.Scope(source), Admins.Username)), "Ada")
 }
 
 // doc-example:end pilot2-row-constant
@@ -77,6 +78,6 @@ func TestPilot2Declarations(t *testing.T) {
 	if PublicMedia.Describe().Name != "public-media" || PublicMedia.Describe().Field != "Gallery" {
 		t.Fatal("stored identity followed Go field name")
 	}
-	scopedUsername()
+	_ = scopedUsername()
 	_ = enabledAdmins()
 }

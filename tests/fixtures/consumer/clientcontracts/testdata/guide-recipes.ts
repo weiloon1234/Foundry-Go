@@ -39,14 +39,14 @@ export async function portalLifecycle(transport: HTTPTransport, baseURL: string,
 export function formValues(issues: readonly sdk.Issue[]) {
   type Body = sdk.Operations["itemsEcho"]["request"]["body"];
   let values: Required<Pick<sdk.FormValues<Body>, "amount">> = { amount: "999.99" };
-  // A React state setter fits `update`; it receives a function of the values.
+  // A state setter fits `update`; it receives a function of the values.
   const update: sdk.FormUpdate<typeof values> = (next) => { values = next(values); };
-  // One state per form instance, kept while it is mounted (in React, a hook).
+  // One state per form instance, kept while it is mounted.
   const form = sdk.formFieldState();
   const fields = sdk.fieldBinder((key) => key, () => form);
   const amount = fields(sdk.operation("itemsEcho"), values, update, issues).amount;
-  // Binding computes; the form publishes the render it shows (in React, a
-  // layout effect), and its bindings then write through its update function.
+  // Binding computes; the form publishes the render it shows (after the UI
+  // library shows it), and its bindings then write through its update function.
   sdk.commitFormFields(form);
   amount.onChange("123456789012345678901234567890.123");
   return { name: amount.name, label: amount.label, limits: amount.limits, checks: amount.checks, issues: amount.issues, values };
@@ -220,3 +220,20 @@ export function submissionKey(): sdk.IdempotencyKey {
   return sdk.idempotencyKey(crypto.randomUUID());
 }
 // doc-example:end submission-key
+
+// doc-example:begin idempotent-retry
+export async function submitWithRetry<Request extends { idempotencyKey: sdk.IdempotencyKey }, Response>(
+  send: (request: Request) => Promise<Response>,
+  request: Request,
+): Promise<Response> {
+  try {
+    return await send(request);
+  } catch (error) {
+    if (error instanceof sdk.APIError) {
+      throw error;
+    }
+    // Delivery is uncertain: send the same request unchanged, with the same key.
+    return send(request);
+  }
+}
+// doc-example:end idempotent-retry

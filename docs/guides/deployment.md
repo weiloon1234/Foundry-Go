@@ -1834,9 +1834,7 @@ not upgrade the host tooling. Hosts below generation 19 must first reach the
 supported upgrade floor. Preserve the ordinary deploy and readiness steps after
 the tools upgrade.
 
-The B26 acceptance record owns
-the resource, container and live R2 commands. It also records the implemented
-attachment/staging admission wiring and the outstanding execution evidence. Do not interpret generated paths or a
+Do not interpret generated paths or a
 passing nginx render test as certification of small-request isolation under full
 downstream quotas. R2 conditional multipart create and replace passed live
 certification on 2026-11-15 and now support objects up to `MaxObjectBytes`.

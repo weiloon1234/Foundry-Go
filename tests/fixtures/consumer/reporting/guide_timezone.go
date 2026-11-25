@@ -16,38 +16,20 @@ func zoneSettings() application.Settings {
 
 func reportService(s application.Services) *Reports {
 	// doc-example:begin application-timezone-2
-	reports := NewReports(s.Time())
+	return NewReports(s.Time())
 	// doc-example:end application-timezone-2
-	return reports
 }
 
 func calendarDates(s application.Services) error {
 	// doc-example:begin application-timezone-3
+	// Check err after each call.
 	dates := s.Time()
-	now, err := dates.Now() // UTC instant
-	if err != nil {
-		return err
-	}
+	now, err := dates.Now()     // UTC instant
 	today, err := dates.Today() // date in the application zone
-	if err != nil {
-		return err
-	}
 	when, err := dates.Parse("2026-09-26T09:00:00")
-	if err != nil {
-		return err
-	}
-	text, err := dates.Format(when) // 2026-09-26T09:00:00+08:00
-	if err != nil {
-		return err
-	}
-	start, err := dates.StartOfDay(when) // local midnight as a UTC instant
-	if err != nil {
-		return err
-	}
+	text, err := dates.Format(when)         // 2026-09-26T09:00:00+08:00
+	start, err := dates.StartOfDay(when)    // local midnight as a UTC instant
 	tomorrow, err := dates.AddDays(when, 1) // same local time next calendar day
-	if err != nil {
-		return err
-	}
 	// doc-example:end application-timezone-3
 	_ = now
 	_ = today

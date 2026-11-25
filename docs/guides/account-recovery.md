@@ -2,8 +2,6 @@
 
 Typed password-reset and email-verification flows share single-use challenge storage, current-model transactions, email revisions and uniform public request handling. [Email adapters](email.md) provide transport; select durable publication explicitly when recovery delivery must survive a process crash.
 
-Milestone 10 passed native acceptance. See the master roadmap for verification evidence and later integration boundaries.
-
 ## Model-owned flows
 
 The [independent consumer](../../tests/fixtures/consumer/recovering/recovery.go)
@@ -293,8 +291,7 @@ not claim crash-durable email publication. [Email adapters](email.md) and [durab
 
 Native PostgreSQL, JSON/HTTP, requester ownership/quota/diagnostics, historical
 email revisions, rollback, compiler and real-gopls tests passed. Generation is
-current for framework stores and consumer DTOs. See the master roadmap
-for complete evidence. Email transport acceptance and durable job delivery retain their separate operational requirements.
+current for framework stores and consumer DTOs. Email transport acceptance and durable job delivery retain their separate operational requirements.
 
 
 The ORM examples are checked against the [compiled guide examples](../../tests/fixtures/goway/guideadapters) and the linked consumer sources.

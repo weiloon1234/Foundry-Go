@@ -2,8 +2,7 @@
 
 Consumer-startup C01 passed native full verification, configuration/generator
 races and independent compiler/editor acceptance. It adds configuration
-descriptors to the existing Go generator. Verification status is owned by the
-master.
+descriptors to the existing Go generator.
 This feature derives the configuration schema consumed by [configured application assembly](application-bootstrap.md). The application registers domain declarations and constructors; the builder assembles the selected services.
 
 <a id="agent-entry"></a>

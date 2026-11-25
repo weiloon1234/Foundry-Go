@@ -50,7 +50,6 @@ func rememberSession(ctx context.Context, web *session.Sessions[models.User, mod
 
 func rotateSession(ctx context.Context, web *session.Sessions[models.User, model.ID[models.User]], currentSecret secret.String) (session.Issued[models.User, model.ID[models.User]], error) {
 	// doc-example:begin rotate-session
-	rotated, err := web.Rotate(ctx, currentSecret)
+	return web.Rotate(ctx, currentSecret)
 	// doc-example:end rotate-session
-	return rotated, err
 }

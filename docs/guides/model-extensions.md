@@ -1,8 +1,6 @@
 # Model extensions
 
-Milestone 18 passed native verification and consumer review. The
-master evidence
-records the checks and operational limits.
+Milestone 18 passed native verification and consumer review.
 
 See also
 [attachments](attachments.md) for collection policy and recoverable storage, and

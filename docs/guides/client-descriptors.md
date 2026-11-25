@@ -221,6 +221,4 @@ Review explicit schema-type imports if a name collides with a new SDK declaratio
 Add domain presentation tags and locale messages in the application's Go
 declarations; keep separate request and response views. Extend the installed
 package's tests with typed field lookup, actual descriptor calls and validation
-incompleteness. The framework's
-acceptance record covers its own
-consumers; it does not replace the starter's upgrade checks or close B08.
+incompleteness. The framework's acceptance covers its own consumers; it does not replace the starter's upgrade checks or close B08.

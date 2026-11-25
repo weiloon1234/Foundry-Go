@@ -5,8 +5,6 @@ stored references come from the application's declarations and `foundry generate
 
 Typed providers, guards, permissions and policies resolve concrete models once per request. HTTP adapters retain model and resource ownership through ordinary, signed and native handlers.
 
-Milestone 10 passed native acceptance. See the master roadmap for verification evidence and later integration boundaries.
-
 <a id="agent-entry"></a>
 ## Agent entry
 
@@ -34,7 +32,7 @@ The application owns `Account`, `models.User`, `models.Order`, and `Operator` an
 
 `models.Status` is the application's string-backed `//foundry:enum`, with `StatusActive = "active"` and `StatusDisabled = "disabled"`; generate its enum descriptor with the model package.
 
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `attribution`, `auth`, `testkit/auth` as `authtest`, `database`, `fault`, `http` as `foundryhttp`, `http`, `model`, `http/modelbinding`, `database/orm`, `auth/password`, `ratelimit`, `secret`, `auth/session`, `auth/token`, `value`. Standard-library aliases: `net/http` as `stdhttp`.
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `attribution`, `auth`, `testkit/auth` as `authtest`, `database`, `fault`, `http` as `foundryhttp`, `model`, `http/modelbinding`, `database/orm`, `auth/password`, `ratelimit`, `secret`, `auth/session`, `auth/token`, `value`. Standard-library aliases: `net/http` as `stdhttp`.
 
 <!-- compiled-source: tests/fixtures/goway/modelguide/account.go#account-provider -->
 ```go
@@ -144,10 +142,10 @@ ctx = scope.Context()
 user, err := api.Require(ctx)
 ```
 
+Inputs: `ctx context.Context`, `settings application.Settings`, `readOrder auth.Policy[models.User, models.Order]`.
+
 With configured `application.New` assembly, contribute policies, permissions and
 hooks to the application-owned registry instead of building one:
-
-Inputs: `ctx context.Context`, `settings application.Settings`, `readOrder auth.Policy[models.User, models.Order]`.
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/scope_recipes.go#configured-authorization -->
 ```go
@@ -224,10 +222,10 @@ and maps to HTTP 403. To publish the code, wrap it in a declared endpoint error.
 
 ## Authorization hooks
 
+Inputs: `isSuperAdmin func(context.Context, models.User) (bool, error)`, `readOnlyMode *atomic.Bool`.
+
 Hooks run around every policy and permission for their model type in a registry
 that contains them:
-
-Inputs: `isSuperAdmin func(context.Context, models.User) (bool, error)`, `readOnlyMode *atomic.Bool`.
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/scope_recipes.go#policy-hooks -->
 ```go
@@ -325,7 +323,6 @@ token cap under `RejectNew`) maps to 409 `conflict`, and
 never become response text. Ordinary domain HTTP errors are preserved. Typed ordinary, signed, model-bound and native/raw authentication adapters are
 verified through independent consumer and transport tests.
 
-
 <a id="recipe-declare-permission"></a>
 ## Typed permissions
 
@@ -361,7 +358,7 @@ type ProfileEndpoint = foundryhttp.AuthenticatedEndpoint[foundryhttp.NoPath, fou
 <!-- compiled-source: tests/fixtures/consumer/authenticating/permissions.go#configure-permission -->
 ```go
 func PermissionProfile(endpoint ProfileEndpoint) ProfileEndpoint {
-	return http.ConfigureAuthenticated(endpoint, http.Permissions(ViewAccount))
+	return foundryhttp.ConfigureAuthenticated(endpoint, foundryhttp.Permissions(ViewAccount))
 }
 ```
 
@@ -384,9 +381,9 @@ contain the exact permission declarations, including those in later branches.
 <!-- compiled-source: tests/fixtures/consumer/authenticating/any_of.go#editorial-alternatives -->
 ```go
 func EditorialProfile(endpoint ProfileEndpoint, writeScopes, approveScopes auth.AccessScopes[models.User], write, approve auth.Permission[models.User]) ProfileEndpoint {
-	return http.ConfigureAuthenticated(endpoint, http.AnyOf(
-		http.AllOf(http.Scopes(writeScopes), http.Permissions(write)),
-		http.AllOf(http.Scopes(approveScopes), http.Permissions(approve)),
+	return foundryhttp.ConfigureAuthenticated(endpoint, foundryhttp.AnyOf(
+		foundryhttp.AllOf(foundryhttp.Scopes(writeScopes), foundryhttp.Permissions(write)),
+		foundryhttp.AllOf(foundryhttp.Scopes(approveScopes), foundryhttp.Permissions(approve)),
 	))
 }
 ```
@@ -519,7 +516,6 @@ Credential secrets and the concrete model are absent from the origin.
 Auditing and the existing transactional event outbox can capture this context;
 ordinary in-process callbacks do not gain crash durability. [MFA observers](mfa.md) can map typed security notices to application events and enqueue them through the mutation transaction. The [consumer example](../../tests/fixtures/consumer/multifactor/security.go) uses the shared event outbox.
 
-
 ## Authentication test helpers
 
 Import `testkit/auth` as `authtest`. `authtest.Scope(t, registry, credentials...)`
@@ -552,7 +548,6 @@ scope even when later assertions fail. The
 [consumer example](../../tests/fixtures/consumer/authenticating/accounts_test.go)
 uses the helpers alongside its existing guard and permission declarations. The tests exercise the production authentication path.
 
-
 ## Signed endpoints and bound resources
 
 Configure scopes, permissions and ordinary endpoint options, then call `SignedAuthenticated`:
@@ -569,15 +564,15 @@ Inputs: `endpoint http.Endpoint[OrderPath, http.NoQuery, http.NoBody, http.NoCon
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/composition_recipes.go#signed-bound-order -->
 ```go
-secured := http.RequireAuthentication(endpoint, authentication, api)
-secured = http.ConfigureAuthenticated(secured, http.Permissions(ViewAccount))
-signed := http.SignedAuthenticated(secured, signer)
-binding := http.ForSignedAuthenticatedBinding(signed)
+secured := foundryhttp.RequireAuthentication(endpoint, authentication, api)
+secured = foundryhttp.ConfigureAuthenticated(secured, foundryhttp.Permissions(ViewAccount))
+signed := foundryhttp.SignedAuthenticated(secured, signer)
+binding := foundryhttp.ForSignedAuthenticatedBinding(signed)
 bound := modelbinding.BindAuthenticated(binding, orders)
 registration := bound.Handle(func(ctx context.Context, user models.User,
-	in modelbinding.Input[OrderPath, http.NoQuery, http.NoBody, models.Order],
-) (http.NoContent, error) {
-	return http.NoContent{}, ReadOrder.Authorize(ctx, api, in.Model)
+	in modelbinding.Input[OrderPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.Order],
+) (foundryhttp.NoContent, error) {
+	return foundryhttp.NoContent{}, ReadOrder.Authorize(ctx, api, in.Model)
 })
 ```
 
@@ -603,15 +598,15 @@ resources never produce partially populated models for a handler.
 
 ## Authenticated native handlers
 
-For native `net/http` integration, bind authentication to the typed route itself:
-
 Inputs: `route http.Route[OrderPath]`, `authentication *http.Authentication`, `api auth.Guard[models.User]`, `handle func(stdhttp.ResponseWriter, *stdhttp.Request, models.User, OrderPath)`.
+
+For native `net/http` integration, bind authentication to the typed route itself:
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/composition_recipes.go#authenticated-raw-route -->
 ```go
-secured := http.RequireRouteAuthentication(route, authentication, api)
-secured = http.ConfigureAuthenticatedRoute(secured, http.Permissions(ViewAccount))
-registration := http.HandleAuthenticatedRaw(secured, func(w stdhttp.ResponseWriter,
+secured := foundryhttp.RequireRouteAuthentication(route, authentication, api)
+secured = foundryhttp.ConfigureAuthenticatedRoute(secured, foundryhttp.Permissions(ViewAccount))
+registration := foundryhttp.HandleAuthenticatedRaw(secured, func(w stdhttp.ResponseWriter,
 	r *stdhttp.Request, user models.User, path OrderPath,
 ) {
 	handle(w, r, user, path)
@@ -664,27 +659,27 @@ Inputs: `endpoint http.Endpoint[http.NoPath, http.NoQuery, http.NoBody, http.NoC
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/composition_recipes.go#actor-middleware-order -->
 ```go
-tenant := http.DefineMiddleware("app.tenant", func(next stdhttp.Handler) (stdhttp.Handler, error) {
+tenant := foundryhttp.DefineMiddleware("app.tenant", func(next stdhttp.Handler) (stdhttp.Handler, error) {
 	return stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		user, err := api.Require(r.Context())
 		if err != nil {
-			http.WriteError(w, r, err)
+			foundryhttp.WriteError(w, r, err)
 			return
 		}
 		tenantID, err := tenantOf(r.Context(), user)
 		if err != nil {
-			http.WriteError(w, r, err)
+			foundryhttp.WriteError(w, r, err)
 			return
 		}
 		next.ServeHTTP(w, r.WithContext(WithTenant(r.Context(), tenantID)))
 	}), nil
 })
-limiter, err := ratelimit.Define("api.users", http.ActorKeys(), ratelimit.PerMinute(120)).Bind(store)
+limiter, err := ratelimit.Define("api.users", foundryhttp.ActorKeys(), ratelimit.PerMinute(120)).Bind(store)
 if err != nil {
-	return http.AuthenticatedEndpoint[http.NoPath, http.NoQuery, http.NoBody, models.User, http.NoContent]{}, err
+	return ProfileEndpoint{}, err
 }
-secured := http.RequireAuthentication(endpoint, transport, api,
-	http.ActorMiddleware[models.User](http.RateLimitByActor(limiter, api), tenant))
+secured := foundryhttp.RequireAuthentication(endpoint, transport, api,
+	foundryhttp.ActorMiddleware[models.User](foundryhttp.RateLimitByActor(limiter, api), tenant))
 ```
 
 `RateLimitByActor` keys a quota by a digest of the authenticated model identity,
@@ -742,9 +737,7 @@ See [social login](social-login.md).
 ## Security events and operations
 
 See [authentication operations](auth-operations.md) for typed MFA observations,
-transactional outbox composition, bounded pruning and account retirement. The
-parity inventory
-records implemented behaviors, explicit redesigns and later milestone integrations.
+transactional outbox composition, bounded pruning and account retirement.
 Milestone 10 acceptance includes these contracts.
 
 ## Cookie response caching
@@ -756,7 +749,6 @@ policy before downstream handling. Raw and typed handlers receive this default.
 Explicit downstream cache headers remain an application-owned override; never
 make personalized cookie responses publicly cacheable. Bearer-only routes keep
 their existing response policy.
-
 
 The ORM examples are checked against the [compiled guide examples](../../tests/fixtures/goway/guideadapters) and the linked consumer sources.
 
@@ -770,8 +762,8 @@ not declare `ticket`.
 
 <!-- compiled-source: tests/fixtures/consumer/reporting/ticket_route.go#ticket-authentication -->
 ```go
-func ticketAuthentication(endpoint http.Endpoint[http.NoPath, http.NoQuery, http.NoBody, http.Download], binding http.GuardBinding[Operator], tokens *token.Tokens[Operator, model.ID[Operator]]) http.TicketEndpoint[http.NoPath, http.NoQuery, http.NoBody, Operator, http.Download] {
-	return http.TicketAuthenticated(endpoint, binding, tokens)
+func ticketAuthentication(endpoint foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.Download], binding foundryhttp.GuardBinding[Operator], tokens *token.Tokens[Operator, model.ID[Operator]]) foundryhttp.TicketEndpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, Operator, foundryhttp.Download] {
+	return foundryhttp.TicketAuthenticated(endpoint, binding, tokens)
 }
 ```
 
@@ -781,8 +773,8 @@ boundary; ordinary formatting of `secret.String` never reveals the ticket.
 
 <!-- compiled-source: tests/fixtures/consumer/reporting/ticket_route.go#authentication-example-3 -->
 ```go
-func ticketURL(ctx context.Context, endpoint http.TicketEndpoint[http.NoPath, http.NoQuery, http.NoBody, Operator, http.Download], ticket secret.String) (string, error) {
-	return endpoint.URL(ctx, http.NoPath{}, http.NoQuery{}, ticket)
+func ticketURL(ctx context.Context, endpoint foundryhttp.TicketEndpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, Operator, foundryhttp.Download], ticket secret.String) (string, error) {
+	return endpoint.URL(ctx, foundryhttp.NoPath{}, foundryhttp.NoQuery{}, ticket)
 }
 ```
 

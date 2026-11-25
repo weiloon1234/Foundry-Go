@@ -77,9 +77,8 @@ type UserResponse = httpdto.UserResponse
 func updateURL(ctx context.Context, Update foundryhttp.Endpoint[UserPath, NearbyInput, UpdateUser, UserResponse], path UserPath, query NearbyInput) (string, error) {
 	// doc-example:begin http-endpoints-4
 	scoped := foundryhttp.ConfigureEndpoint(Update, foundryhttp.Within(foundryhttp.DefineScope("/api", "api")))
-	location, err := scoped.URL(ctx, path, query)
+	return scoped.URL(ctx, path, query)
 	// doc-example:end http-endpoints-4
-	return location, err
 }
 
 // doc-example:begin order-location-contracts

@@ -14,16 +14,14 @@ Milestone 24 delivered shared logical-operation observations and explicit
 the named client's header budget. See [observability](observability.md); the
 milestone 24 verification passed as recorded in [production acceptance](../production-acceptance.md).
 
-Milestone 20 passed native verification and consumer review. The
-master evidence
-records the checks and operational limits.
+Milestone 20 passed native verification and consumer review.
 
 <a id="recipe-named-http-client"></a>
 ## Resolve a client and bound the request
 
-Construct one named client per upstream and inject it into domain services:
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `http` as `foundryhttp`, `httpclient`, `httpclient/capture` as `outboundcapture`, `secret`.
 
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `http`, `httpclient`, `httpclient/capture` as `outboundcapture`, `secret`.
+Construct one named client per upstream and inject it into domain services:
 
 <!-- compiled-source: tests/fixtures/consumer/background/account_client.go#named-client-deadline -->
 ```go
@@ -309,16 +307,16 @@ viewer. At least one access option is required and the routes send
 
 <!-- compiled-source: tests/fixtures/consumer/teamworkflow/outbound_capture.go#outbound-capture-routes -->
 ```go
-func OutboundCaptureRoutes(captures *outboundcapture.Store) ([]http.RouteRegistration, error) {
+func OutboundCaptureRoutes(captures *outboundcapture.Store) ([]foundryhttp.RouteRegistration, error) {
 	transport, guard, err := authfixture.Authentication(ReadCaptures.Registration())
 	if err != nil {
 		return nil, err
 	}
-	binding, err := http.BindGuard(transport, guard)
+	binding, err := foundryhttp.BindGuard(transport, guard)
 	if err != nil {
 		return nil, err
 	}
-	return outboundcapture.Routes(http.DefineScope("/developer", "developer"), captures, binding, http.Permissions(ReadCaptures))
+	return outboundcapture.Routes(foundryhttp.DefineScope("/developer", "developer"), captures, binding, foundryhttp.Permissions(ReadCaptures))
 }
 ```
 
@@ -466,4 +464,3 @@ migration command; it is registered whenever the application has a database,
 also while capture is disabled. Register `application.OutboundCaptureCommand()`
 for `outbound-captures prune`, which counts rows past retention and the
 per-client cap, and removes them with `--apply`.
-

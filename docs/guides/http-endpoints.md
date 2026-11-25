@@ -20,7 +20,7 @@ generation, consumer race tests, six new compiler-rejection cases and vet passed
 Canonical generation, consumer checks and actual editor probes also passed.
 Full regression verification also passed. [Typed validation](validation.md) now
 adds generated field rules and endpoint integration; its focused checks passed.
-[Route-model binding](http-model-binding.md), [pagination adapters](http-pagination.md) and additional validation/middleware are available. Combined transport acceptance passed; the HTTP blueprint records current milestone status.
+[Route-model binding](http-model-binding.md), [pagination adapters](http-pagination.md) and additional validation/middleware are available. Combined transport acceptance passed.
 
 An endpoint combines a route, query declaration, request body and response
 descriptor. Write each route-declaring call in its own statement, passing the
@@ -248,7 +248,7 @@ or `ReadableStream`.
 
 The URL and validation recipes use these concrete transport declarations; run `foundry generate` after declaring them.
 
-`httpkernel` (called `routes` in validation) owns the path.
+The path type:
 
 <!-- compiled-source: tests/fixtures/consumer/httpkernel/path_declarations.go#user-path-declaration -->
 ```go
@@ -258,7 +258,7 @@ type UserPath struct {
 }
 ```
 
-`httpquery` (called `filters` in validation) owns the query.
+The query type:
 
 <!-- compiled-source: tests/fixtures/consumer/httpquery/floats.go#floating-url-types -->
 ```go
@@ -277,7 +277,7 @@ type NearbyInput struct {
 type PositionPath struct{ Latitude Latitude }
 ```
 
-`httpdto` (called `dto` in validation) owns the request and response.
+The request and response types:
 
 <!-- compiled-source: tests/fixtures/consumer/httpdto/dto.go#patch-presence -->
 ```go
@@ -302,14 +302,14 @@ type UserResponse struct {
 ```
 
 Here `models.User` is your application model, and `models.Status` is its string-backed enum with the `StatusActive` member.
-`UserPath`, `NearbyInput`, `UpdateUser`, and `UserResponse` are same-package aliases for `httpkernel.UserPath`, `httpquery.NearbyInput`, `httpdto.UpdateUser`, and `httpdto.UserResponse`, respectively.
+`UserPath`, `NearbyInput`, `UpdateUser` and `UserResponse` are the declarations above, written in one application package; the recipe below uses them by those names.
 
 Inputs: `ctx context.Context`, `Update foundryhttp.Endpoint[UserPath, NearbyInput, UpdateUser, UserResponse]`, `path UserPath`, `query NearbyInput`.
 
 <!-- compiled-source: tests/fixtures/consumer/httpendpoints/endpoint_recipes.go#http-endpoints-4 -->
 ```go
 scoped := foundryhttp.ConfigureEndpoint(Update, foundryhttp.Within(foundryhttp.DefineScope("/api", "api")))
-location, err := scoped.URL(ctx, path, query)
+return scoped.URL(ctx, path, query)
 ```
 
 `URL` combines the existing path and query codecs, escaping each source using its

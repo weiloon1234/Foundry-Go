@@ -16,9 +16,8 @@ func secureHandler(router http.Handler) (http.Handler, error) {
 	config.HSTS = value.Set(foundryhttp.HSTSPolicy{
 		MaxAge: 24 * time.Hour,
 	})
-	handler, err := foundryhttp.ApplyMiddleware(router, foundryhttp.SecurityHeaders(config))
+	return foundryhttp.ApplyMiddleware(router, foundryhttp.SecurityHeaders(config))
 	// doc-example:end http-security-headers-1
-	return handler, err
 }
 
 func isolationPolicy(config foundryhttp.SecurityHeadersConfig) foundryhttp.SecurityHeadersConfig {

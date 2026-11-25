@@ -74,9 +74,9 @@ Failed lock cleanup discards the physical connection, releasing session-owned lo
 
 ## Explicit rollback
 
-A definition may declare `Down` SQL that reverses it:
-
 These recipes need no application model; the transport and helper types they use are declared or described on this page.
+
+A definition may declare `Down` SQL that reverses it:
 
 <!-- compiled-source: tests/fixtures/consumer/migrations/guide_rollback.go#reversible-migration -->
 ```go
@@ -229,7 +229,7 @@ Once created, a scaffold belongs to the consumer. Edit it normally; it has no ge
 
 ## Verification limits
 
-Protocol tests exercise apply-once history, drift, bounded history reads/growth, concurrent runners, lock timeout, partial commits, lost commit responses, connection disposal, seeder dependencies, and after-commit outcomes. Command tests cover service-free help/listing, drift exit errors, typed selection, progress on failure, and writer failure after commit. Scaffold tests compile a separate consumer, verify that unfinished work fails, and cover deterministic output, ownership, name/file collisions, exclusive creation, and recovery. Consumer metadata tests inspect declarations without SQL. Real PostgreSQL tests additionally run competing migration runners, verify read-only status, reject checksum drift, recover after a failed pending migration, and execute an explicitly repeatable seeder twice. The master roadmap records verification evidence. Lost commit responses are tested through protocol fault injection, not a live network interruption.
+Protocol tests exercise apply-once history, drift, bounded history reads/growth, concurrent runners, lock timeout, partial commits, lost commit responses, connection disposal, seeder dependencies, and after-commit outcomes. Command tests cover service-free help/listing, drift exit errors, typed selection, progress on failure, and writer failure after commit. Scaffold tests compile a separate consumer, verify that unfinished work fails, and cover deterministic output, ownership, name/file collisions, exclusive creation, and recovery. Consumer metadata tests inspect declarations without SQL. Real PostgreSQL tests additionally run competing migration runners, verify read-only status, reject checksum drift, recover after a failed pending migration, and execute an explicitly repeatable seeder twice. Lost commit responses are tested through protocol fault injection, not a live network interruption.
 
 <a id="recipe-online-migration"></a>
 ## Concurrent indexes and nontransactional statements

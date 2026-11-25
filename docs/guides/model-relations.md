@@ -13,9 +13,6 @@ Relations retain source model, target model and key types. The [handwritten mode
 
 ## Declaring keys in Go
 
-Generate model slots and keys from the directive, then compose
-owner-typed relationships at package scope. The [consumer declarations](../../tests/fixtures/consumer/models/orm_relations.go) demonstrate this pattern:
-
 The `models` namespace below is the application model package. The office examples
 use the application's `Office`, `Employee` and `Region` models and their generated
 `Offices`, `Employees` and `Regions` table values. The generated
@@ -35,6 +32,9 @@ These are application relation declarations built with `orm.BelongsToOf`,
 `models.Status` is the application's string-backed `//foundry:enum`, with `StatusActive = "active"` and `StatusDisabled = "disabled"`; generate its enum descriptor with the model package.
 
 Framework imports from `github.com/weiloon1234/Foundry-Go`: `database`, `database/lifecycle`, `model`, `database/orm`, `database/relation`, `value`.
+
+Generate model slots and keys from the directive, then compose
+owner-typed relationships at package scope. The [consumer declarations](../../tests/fixtures/consumer/models/orm_relations.go) demonstrate this pattern:
 
 <!-- compiled-source: tests/fixtures/consumer/relationshipfilters/guide_relations.go#model-relations-1 -->
 ```go
@@ -129,15 +129,15 @@ Every morph target shares one key type (here a unique `Code`), because one store
 
 ## Scopes and nested loading
 
-Apply related predicates explicitly with `Where`, and nested descriptors with `With`:
-
 Inputs: `ctx context.Context`, `db database.Executor`.
+
+Apply related predicates explicitly with `Where`, and nested descriptors with `With`:
 
 <!-- compiled-source: tests/fixtures/consumer/relationshipfilters/guide_relations.go#model-relations-6 -->
 ```go
 introducer := models.UserLinks.Introducer.
 	Where(orm.Eq(models.Users.Status, models.StatusActive)).With(models.UserLinks.Introducer)
-users, err := orm.All(ctx, db, models.Users.Query().With(introducer))
+return orm.All(ctx, db, models.Users.Query().With(introducer))
 ```
 
 Predicates and nested descriptors must belong to the target model. A filtered-out target becomes loaded empty; it does not remove its parent. Parent scopes and related scopes are separate declarations. Automatic [soft-delete visibility](model-soft-deletes.md) applies independently to targets and pivots. Authentication remains a separate authorization concern.
@@ -160,7 +160,7 @@ groups := models.UserLinks.Groups.
 	OrderByPivot(orm.Asc(models.Memberships.Priority)).
 	OrderBy(orm.Desc(models.Groups.Code)).
 	With(models.GroupLinks.Owner).WithPivot(models.MembershipLinks.Inviter)
-users, err := orm.All(ctx, db, models.Users.Query().With(groups))
+return orm.All(ctx, db, models.Users.Query().With(groups))
 ```
 
 `user.Groups.Get()` returns `([]relation.Link[Group, Membership], bool)`. Each link exposes a concrete `relation.Link.Model` and `Pivot`. The loaded flag distinguishes not loaded from loaded empty; retrieving the collection copies its slice. Target models shared by different parents never carry another parent's pivot data. Distinct pivot rows for the same target remain distinct links. If one pivot row matches several target rows, loading fails with `database.TooManyRows`; enforce target-key uniqueness in the database when required.
@@ -191,7 +191,7 @@ Eager loading uses separate SQL statements. Use a caller-owned transaction with 
 
 ## Current delivery and verification
 
-Milestone 06 implements belongs-to, has-one, has-many and many-to-many with typed pivots, nullable/self/natural keys, typed scopes, nested eager loading, explicit LoadFrom/LoadMissingFrom and bounded model iteration. [Typed relation aggregates](model-aggregates.md) use declared computed slots without loading related models. [Declared projections](model-projections.md) return independent result types for partial reads, grouped reports and scalar summaries. [Typed joins](model-joins.md) include inner/outer/self joins with explicit scoped fields. The milestone completion review connects these APIs and advanced queries to their consumer coverage; the master roadmap owns verification status.
+Milestone 06 implements belongs-to, has-one, has-many and many-to-many with typed pivots, nullable/self/natural keys, typed scopes, nested eager loading, explicit LoadFrom/LoadMissingFrom and bounded model iteration. [Typed relation aggregates](model-aggregates.md) use declared computed slots without loading related models. [Declared projections](model-projections.md) return independent result types for partial reads, grouped reports and scalar summaries. [Typed joins](model-joins.md) include inner/outer/self joins with explicit scoped fields. The milestone completion review connects these APIs and advanced queries to their consumer coverage.
 
 The [PostgreSQL acceptance fixture](../../tests/fixtures/consumer/model_relations_postgres_test.go) verifies query counts, key batching, cardinality errors, nullable inverses, empty collections, nested loading, explicit scopes, natural keys, loaded-state preservation and resource bounds. Negative compiler fixtures reject incompatible keys, owners, targets and scope predicates. Native declaration tests reject invalid slots, keys and ownership before SQL.
 

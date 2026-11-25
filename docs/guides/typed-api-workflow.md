@@ -3,7 +3,7 @@
 T07 passed native full verification, independent packaged consumers, PostgreSQL
 races, strict generated clients, compiler/editor acceptance and bounded fuzzing.
 The complete changed-code [audit](typed-api-audit.md) found and verified five
-fixes/improvements. See the acceptance record.
+fixes/improvements.
 
 The [team/project consumer](../../tests/fixtures/consumer/teamworkflow/application.go)
 combines the delivered public contracts in ordinary Go. It is a framework fixture,
@@ -88,8 +88,7 @@ The complete source/test/docs batch preceded compilation. The initial full gate,
 focused PostgreSQL/race/client checks, independent packaged consumers and native
 build/generation/editor/runtime measurements passed. The complete changed-code
 [audit](typed-api-audit.md) recorded five findings and grouped their fixes.
-All eight fuzz targets and the final full gate passed. Results are recorded in the
-master.
+All eight fuzz targets and the final full gate passed.
 
 ## Measured local cost
 

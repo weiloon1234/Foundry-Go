@@ -20,7 +20,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/application"
 	"github.com/weiloon1234/Foundry-Go/database"
 	"github.com/weiloon1234/Foundry-Go/foundation"
-	"github.com/weiloon1234/Foundry-Go/http"
+	foundryhttp "github.com/weiloon1234/Foundry-Go/http"
 	"github.com/weiloon1234/Foundry-Go/idempotency"
 	"github.com/weiloon1234/Foundry-Go/secret"
 	pgtest "github.com/weiloon1234/Foundry-Go/testkit/postgres"
@@ -80,23 +80,23 @@ func TestVerifiedWebhookReauthenticatesEveryReplay(t *testing.T) {
 	}
 	var calls atomic.Int32
 	// doc-example:begin verified-webhook-route
-	providerWebhookRoute := http.DefineRoute(http.RouteSpec{ID: "provider.webhook", Method: http.POST, Access: http.Public}, http.StaticPath("/webhook"))
-	providerWebhookEndpoint := http.DefineEndpoint(providerWebhookRoute, http.EmptyQuery(), SubmissionBody(), http.EmptyResponse(204))
-	providerWebhookEndpoint = http.ConfigureEndpoint(providerWebhookEndpoint, http.Use(http.VerifyWebhook(verifier)))
-	endpoint := http.Idempotent(providerWebhookEndpoint, store, idempotency.Definition{ID: "provider.delivery", Version: 1})
+	providerWebhookRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "provider.webhook", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/webhook"))
+	providerWebhookEndpoint := foundryhttp.DefineEndpoint(providerWebhookRoute, foundryhttp.EmptyQuery(), SubmissionBody(), foundryhttp.EmptyResponse(204))
+	providerWebhookEndpoint = foundryhttp.ConfigureEndpoint(providerWebhookEndpoint, foundryhttp.Use(foundryhttp.VerifyWebhook(verifier)))
+	endpoint := foundryhttp.Idempotent(providerWebhookEndpoint, store, idempotency.Definition{ID: "provider.delivery", Version: 1})
 
-	type input = http.Input[http.NoPath, http.NoQuery, Submission]
-	router, err := http.NewRouter(endpoint.Handle(func(ctx context.Context, _ input) (idempotency.Scope, error) {
+	type input = foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, Submission]
+	router, err := foundryhttp.NewRouter(endpoint.Handle(func(ctx context.Context, _ input) (idempotency.Scope, error) {
 		delivery, ok := verifier.FromContext(ctx)
 		if !ok {
 			return idempotency.Scope{}, fmt.Errorf("verified delivery missing")
 		}
 		var account providerAccount = delivery.Account()
 		return idempotency.NewScope(string(delivery.Provider()), strconv.FormatInt(int64(account), 10))
-	}, func(ctx context.Context, tx *database.Tx, in input) (http.NoContent, error) {
+	}, func(ctx context.Context, tx *database.Tx, in input) (foundryhttp.NoContent, error) {
 		calls.Add(1)
 		_, err := orm.Insert(ctx, tx, Orders.Table, orm.Set(Orders.WorkspaceID, 1), orm.Set(Orders.Caller, 99), orm.Set(Orders.Name, in.Body.Name))
-		return http.NoContent{}, err
+		return foundryhttp.NoContent{}, err
 	}))
 	if err != nil {
 		t.Fatal(err)

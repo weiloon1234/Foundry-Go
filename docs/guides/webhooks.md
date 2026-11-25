@@ -19,7 +19,7 @@ and Ed25519 public verification keys (`whpk_`). `webhook.Stripe` supports Stripe
 The same `whsec_` prefix has different key semantics in these protocols; select
 the provider's actual protocol rather than guessing from its key prefix.
 
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `webhook/capture`, `clock`, `database`, `encryption`, `http`, `httpclient`, `idempotency`, `jobs`, `webhook/outbound`, `secret`, `webhook`.
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `webhook/capture`, `clock`, `database`, `encryption`, `http` as `foundryhttp`, `httpclient`, `idempotency`, `jobs`, `webhook/outbound`, `secret`, `webhook`.
 
 <!-- compiled-source: tests/fixtures/consumer/security/contracts.go#webhook-verifier -->
 ```go
@@ -116,23 +116,23 @@ Inputs: `t *testing.T`.
 
 <!-- compiled-source: tests/fixtures/consumer/idempotenthttp/publication_test.go#verified-webhook-route -->
 ```go
-providerWebhookRoute := http.DefineRoute(http.RouteSpec{ID: "provider.webhook", Method: http.POST, Access: http.Public}, http.StaticPath("/webhook"))
-providerWebhookEndpoint := http.DefineEndpoint(providerWebhookRoute, http.EmptyQuery(), SubmissionBody(), http.EmptyResponse(204))
-providerWebhookEndpoint = http.ConfigureEndpoint(providerWebhookEndpoint, http.Use(http.VerifyWebhook(verifier)))
-endpoint := http.Idempotent(providerWebhookEndpoint, store, idempotency.Definition{ID: "provider.delivery", Version: 1})
+providerWebhookRoute := foundryhttp.DefineRoute(foundryhttp.RouteSpec{ID: "provider.webhook", Method: foundryhttp.POST, Access: foundryhttp.Public}, foundryhttp.StaticPath("/webhook"))
+providerWebhookEndpoint := foundryhttp.DefineEndpoint(providerWebhookRoute, foundryhttp.EmptyQuery(), SubmissionBody(), foundryhttp.EmptyResponse(204))
+providerWebhookEndpoint = foundryhttp.ConfigureEndpoint(providerWebhookEndpoint, foundryhttp.Use(foundryhttp.VerifyWebhook(verifier)))
+endpoint := foundryhttp.Idempotent(providerWebhookEndpoint, store, idempotency.Definition{ID: "provider.delivery", Version: 1})
 
-type input = http.Input[http.NoPath, http.NoQuery, Submission]
-router, err := http.NewRouter(endpoint.Handle(func(ctx context.Context, _ input) (idempotency.Scope, error) {
+type input = foundryhttp.Input[foundryhttp.NoPath, foundryhttp.NoQuery, Submission]
+router, err := foundryhttp.NewRouter(endpoint.Handle(func(ctx context.Context, _ input) (idempotency.Scope, error) {
 	delivery, ok := verifier.FromContext(ctx)
 	if !ok {
 		return idempotency.Scope{}, fmt.Errorf("verified delivery missing")
 	}
 	var account providerAccount = delivery.Account()
 	return idempotency.NewScope(string(delivery.Provider()), strconv.FormatInt(int64(account), 10))
-}, func(ctx context.Context, tx *database.Tx, in input) (http.NoContent, error) {
+}, func(ctx context.Context, tx *database.Tx, in input) (foundryhttp.NoContent, error) {
 	calls.Add(1)
 	_, err := orm.Insert(ctx, tx, Orders.Table, orm.Set(Orders.WorkspaceID, 1), orm.Set(Orders.Caller, 99), orm.Set(Orders.Name, in.Body.Name))
-	return http.NoContent{}, err
+	return foundryhttp.NoContent{}, err
 }))
 if err != nil {
 	t.Fatal(err)
@@ -177,18 +177,18 @@ an authentication callback:
 
 <!-- compiled-source: tests/fixtures/consumer/teamworkflow/capture.go#webhook-capture-declaration -->
 ```go
-func Webhooks() ([]http.CaptureDeclaration, error) {
-	prefix, err := http.ParsePathPrefix("/wh")
+func Webhooks() ([]foundryhttp.CaptureDeclaration, error) {
+	prefix, err := foundryhttp.ParsePathPrefix("/wh")
 	if err != nil {
 		return nil, err
 	}
-	auth, err := http.ParsePathPrefix("/wh/stream-auth")
+	auth, err := foundryhttp.ParsePathPrefix("/wh/stream-auth")
 	if err != nil {
 		return nil, err
 	}
-	return []http.CaptureDeclaration{
-		http.CapturePrefix(prefix),
-		http.CapturePrefix(auth, http.ExcludeFromCapture()),
+	return []foundryhttp.CaptureDeclaration{
+		foundryhttp.CapturePrefix(prefix),
+		foundryhttp.CapturePrefix(auth, foundryhttp.ExcludeFromCapture()),
 	}, nil
 }
 ```
@@ -210,16 +210,16 @@ a wildcard grant cannot read captured payloads. The routes send
 
 <!-- compiled-source: tests/fixtures/consumer/teamworkflow/capture.go#webhook-capture-routes -->
 ```go
-func CaptureRoutes(captures *capture.Store) ([]http.RouteRegistration, error) {
+func CaptureRoutes(captures *capture.Store) ([]foundryhttp.RouteRegistration, error) {
 	transport, guard, err := authfixture.Authentication(ReadCaptures.Registration())
 	if err != nil {
 		return nil, err
 	}
-	binding, err := http.BindGuard(transport, guard)
+	binding, err := foundryhttp.BindGuard(transport, guard)
 	if err != nil {
 		return nil, err
 	}
-	return capture.Routes(http.DefineScope("/developer", "developer"), captures, binding, http.Permissions(ReadCaptures))
+	return capture.Routes(foundryhttp.DefineScope("/developer", "developer"), captures, binding, foundryhttp.Permissions(ReadCaptures))
 }
 ```
 
@@ -342,51 +342,61 @@ var InvoicePaid = outbound.DefineEvent("invoice.paid", InvoicePaidPayloadJSON())
 var deliverWebhooks = outbound.DefineDeliveryJob("webhooks.deliver", jobs.DefaultPolicy("webhooks"))
 ```
 
-<!-- compiled-source: tests/fixtures/consumer/security/outbound_recipe.go#webhooks-6 -->
+Inputs: `ctx context.Context`, `db *database.DB`, `keyring *encryption.Keyring`, `restrictedClient *httpclient.Client`.
+
+Build the service, then declare the delivery job and its failure sink once. Register the declaration with the job registry and the sink with every worker that runs the job.
+
+<!-- compiled-source: tests/fixtures/consumer/security/outbound_recipe.go#webhooks-service -->
 ```go
-func runWebhookWorker(ctx context.Context, db *database.DB, keyring *encryption.Keyring, restrictedClient *httpclient.Client, backend jobs.Backend, workerConfig jobs.WorkerConfig) error {
-	service, err := outbound.New(outbound.Dependencies{DB: db, Keys: keyring, Client: restrictedClient, Clock: clock.System{}}, outbound.DefaultConfig())
-	if err != nil {
-		return err
-	}
-	defer service.Close(context.Background())
-	declaration, err := deliverWebhooks.Declare(service)
-	if err != nil {
-		return err
-	}
-	sink, err := deliverWebhooks.FailureSink(service)
-	if err != nil {
-		return err
-	}
-	registry, err := jobs.NewRegistry(declaration)
-	if err != nil {
-		return err
-	}
-	worker, err := jobs.NewWorker(backend, registry, workerConfig, jobs.WithFailureSink(sink))
-	if err != nil {
-		return err
-	}
-	return worker.Run(ctx)
+service, err := outbound.New(outbound.Dependencies{DB: db, Keys: keyring, Client: restrictedClient, Clock: clock.System{}}, outbound.DefaultConfig())
+if err != nil {
+	return err
 }
+defer service.Close(context.Background())
+declaration, err := deliverWebhooks.Declare(service) // register with the job registry
+if err != nil {
+	return err
+}
+sink, err := deliverWebhooks.FailureSink(service) // register with every worker running it
+if err != nil {
+	return err
+}
+```
 
-func invoiceDeliveryQueue(service *outbound.Service, producer *jobs.Outbox) (outbound.Queue, error) {
-	queue, err := deliverWebhooks.ToOutbox(service, producer)
-	return queue, err
-}
+Inputs: `service *outbound.Service`, `producer *jobs.Outbox`.
 
-func subscribeInvoices(ctx context.Context, service *outbound.Service, customerURL string) (outbound.EndpointID, secret.String, error) {
-	return service.CreateEndpoint(ctx, outbound.EndpointOptions{URL: customerURL, Events: []outbound.EventType{"invoice.paid"}})
-}
+Bind the job to the transactional outbox. `producer` is the job outbox the application already uses.
 
-// Call one dispatch form inside the business transaction, according to its audience.
-func sendInvoice(ctx context.Context, tx *database.Tx, queue outbound.Queue, endpoint outbound.EndpointID, payload InvoicePaidPayload) (outbound.DeliveryID, error) {
-	id, err := outbound.Send(ctx, tx, queue, endpoint, InvoicePaid, payload)
-	return id, err
-}
-func publishInvoice(ctx context.Context, tx *database.Tx, queue outbound.Queue, payload InvoicePaidPayload) ([]outbound.DeliveryID, error) {
-	ids, err := outbound.Publish(ctx, tx, queue, InvoicePaid, payload)
-	return ids, err
-}
+<!-- compiled-source: tests/fixtures/consumer/security/outbound_recipe.go#webhooks-queue -->
+```go
+return deliverWebhooks.ToOutbox(service, producer)
+```
+
+Inputs: `ctx context.Context`, `service *outbound.Service`, `customerURL string`.
+
+Register a customer endpoint. The signing secret is returned once.
+
+<!-- compiled-source: tests/fixtures/consumer/security/outbound_recipe.go#webhooks-endpoint -->
+```go
+return service.CreateEndpoint(ctx, outbound.EndpointOptions{URL: customerURL, Events: []outbound.EventType{"invoice.paid"}})
+```
+
+Inputs: `ctx context.Context`, `tx *database.Tx`, `queue outbound.Queue`, `endpoint outbound.EndpointID`, `payload InvoicePaidPayload`.
+
+Call one dispatch form inside the business transaction, according to its audience. `Send` targets one endpoint.
+
+<!-- compiled-source: tests/fixtures/consumer/security/outbound_recipe.go#webhooks-send -->
+```go
+return outbound.Send(ctx, tx, queue, endpoint, InvoicePaid, payload)
+```
+
+Inputs: `ctx context.Context`, `tx *database.Tx`, `queue outbound.Queue`, `payload InvoicePaidPayload`.
+
+`Publish` fans the event out to every active subscribed endpoint.
+
+<!-- compiled-source: tests/fixtures/consumer/security/outbound_recipe.go#webhooks-publish -->
+```go
+return outbound.Publish(ctx, tx, queue, InvoicePaid, payload)
 ```
 
 Apply `outbound.Migrations()` in the same schema as the job outbox;

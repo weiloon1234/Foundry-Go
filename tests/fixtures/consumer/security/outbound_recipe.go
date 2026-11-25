@@ -26,21 +26,22 @@ var deliverWebhooks = outbound.DefineDeliveryJob("webhooks.deliver", jobs.Defaul
 
 // doc-example:end invoice-event
 
-// doc-example:begin webhooks-6
 func runWebhookWorker(ctx context.Context, db *database.DB, keyring *encryption.Keyring, restrictedClient *httpclient.Client, backend jobs.Backend, workerConfig jobs.WorkerConfig) error {
+	// doc-example:begin webhooks-service
 	service, err := outbound.New(outbound.Dependencies{DB: db, Keys: keyring, Client: restrictedClient, Clock: clock.System{}}, outbound.DefaultConfig())
 	if err != nil {
 		return err
 	}
 	defer service.Close(context.Background())
-	declaration, err := deliverWebhooks.Declare(service)
+	declaration, err := deliverWebhooks.Declare(service) // register with the job registry
 	if err != nil {
 		return err
 	}
-	sink, err := deliverWebhooks.FailureSink(service)
+	sink, err := deliverWebhooks.FailureSink(service) // register with every worker running it
 	if err != nil {
 		return err
 	}
+	// doc-example:end webhooks-service
 	registry, err := jobs.NewRegistry(declaration)
 	if err != nil {
 		return err
@@ -53,22 +54,25 @@ func runWebhookWorker(ctx context.Context, db *database.DB, keyring *encryption.
 }
 
 func invoiceDeliveryQueue(service *outbound.Service, producer *jobs.Outbox) (outbound.Queue, error) {
-	queue, err := deliverWebhooks.ToOutbox(service, producer)
-	return queue, err
+	// doc-example:begin webhooks-queue
+	return deliverWebhooks.ToOutbox(service, producer)
+	// doc-example:end webhooks-queue
 }
 
 func subscribeInvoices(ctx context.Context, service *outbound.Service, customerURL string) (outbound.EndpointID, secret.String, error) {
+	// doc-example:begin webhooks-endpoint
 	return service.CreateEndpoint(ctx, outbound.EndpointOptions{URL: customerURL, Events: []outbound.EventType{"invoice.paid"}})
+	// doc-example:end webhooks-endpoint
 }
 
-// Call one dispatch form inside the business transaction, according to its audience.
 func sendInvoice(ctx context.Context, tx *database.Tx, queue outbound.Queue, endpoint outbound.EndpointID, payload InvoicePaidPayload) (outbound.DeliveryID, error) {
-	id, err := outbound.Send(ctx, tx, queue, endpoint, InvoicePaid, payload)
-	return id, err
-}
-func publishInvoice(ctx context.Context, tx *database.Tx, queue outbound.Queue, payload InvoicePaidPayload) ([]outbound.DeliveryID, error) {
-	ids, err := outbound.Publish(ctx, tx, queue, InvoicePaid, payload)
-	return ids, err
+	// doc-example:begin webhooks-send
+	return outbound.Send(ctx, tx, queue, endpoint, InvoicePaid, payload)
+	// doc-example:end webhooks-send
 }
 
-// doc-example:end webhooks-6
+func publishInvoice(ctx context.Context, tx *database.Tx, queue outbound.Queue, payload InvoicePaidPayload) ([]outbound.DeliveryID, error) {
+	// doc-example:begin webhooks-publish
+	return outbound.Publish(ctx, tx, queue, InvoicePaid, payload)
+	// doc-example:end webhooks-publish
+}

@@ -44,9 +44,8 @@ func absoluteURL(ctx context.Context, endpoint foundryhttp.Endpoint[foundryhttp.
 	if err != nil {
 		return "", err
 	}
-	absolute, err := foundryhttp.PublicURL(ctx, relative)
+	return foundryhttp.PublicURL(ctx, relative)
 	// doc-example:end http-public-urls-3
-	return absolute, err
 }
 
 func originProxy() foundryhttp.TrustedProxyConfig {

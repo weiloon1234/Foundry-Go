@@ -8,14 +8,12 @@
 
 `codec.Codec[T].Bind(value T)` validates a value and produces a SQL driver value. `Scan(destination *T)` creates a standard SQL scanner that assigns only after successful decoding. `Decode(source any)` is an explicit driver integration boundary and returns a zero T on failure. A codec's zero value is invalid. There is no reflection-based model-field lookup.
 
-The [consumer codec tests](../../tests/fixtures/consumer/codecs_test.go) and [PostgreSQL consumer test](../../tests/fixtures/consumer/postgres_test.go) exercise these public APIs. For a generated enum:
+The [consumer codec tests](../../tests/fixtures/consumer/codecs_test.go) and [PostgreSQL consumer test](../../tests/fixtures/consumer/postgres_test.go) exercise these public APIs.
 
 The `models` namespace below is the application model package. Its `Status` enum
 declaration generates `StatusCodec` and owns the `StatusActive` constant.
 
-The application declares the string-backed enum and its accepted values once:
-
-These recipes need no application model; the transport and helper types they use are declared or described on this page.
+For a generated enum, the application declares the string-backed enum and its accepted values once:
 
 <!-- compiled-source: tests/fixtures/consumer/models/models.go#status-codec-declaration -->
 ```go

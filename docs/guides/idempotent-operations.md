@@ -1,7 +1,6 @@
 # Idempotent operations
 
-T06 native acceptance passed. The evidence records
-commands, source hashes, process/crash coverage, fuzzing and repeated measurements.
+T06 native acceptance passed.
 
 <a id="agent-entry"></a>
 ## Agent entry
@@ -40,7 +39,7 @@ validation and authorization:
 
 <!-- compiled-source: tests/fixtures/consumer/idempotenthttp/order_route.go#authenticated-idempotency -->
 ```go
-func OrderRoute(db database.Executor, endpoint http.AuthenticatedEndpoint[Path, http.NoQuery, Submission, Actor, Receipt], guard auth.Guard[Actor], store *idempotency.Store, create func(context.Context, *database.Tx, Actor, BoundRequest) (Receipt, error)) http.RouteRegistration {
+func OrderRoute(db database.Executor, endpoint foundryhttp.AuthenticatedEndpoint[Path, foundryhttp.NoQuery, Submission, Actor, Receipt], guard auth.Guard[Actor], store *idempotency.Store, create func(context.Context, *database.Tx, Actor, BoundRequest) (Receipt, error)) foundryhttp.RouteRegistration {
 	resolver := modelbinding.Define(func(ctx context.Context, path Path) (value.Optional[Workspace], error) {
 		actor, err := guard.Require(ctx)
 		if err != nil {
@@ -50,20 +49,20 @@ func OrderRoute(db database.Executor, endpoint http.AuthenticatedEndpoint[Path, 
 		return orm.Keyed(workspaces, Workspaces.Key()).Find(ctx, db, path.Workspace)
 	})
 
-	endpointReplay := http.IdempotentAuthenticated(endpoint, store, idempotency.Definition{ID: "orders.create", Version: 1})
+	endpointReplay := foundryhttp.IdempotentAuthenticated(endpoint, store, idempotency.Definition{ID: "orders.create", Version: 1})
 	operation := modelbinding.BindAuthenticatedIdempotent(endpointReplay, resolver)
 	operation = modelbinding.AuthorizeAuthenticatedIdempotentResource(
 		operation,
 		func(_ context.Context, _ Actor, in BoundRequest) error {
 			if !in.Model.Enabled {
-				return http.Forbidden
+				return foundryhttp.Forbidden
 			}
 			return nil
 		},
 	)
 
-	operation = modelbinding.AuthenticatedIdempotentHeaders(operation, func(_ context.Context, result Receipt) ([]http.ResponseHeader, error) {
-		return []http.ResponseHeader{{Name: "Location", Value: http.HeaderValue("/orders/" + result.ID.String())}}, nil
+	operation = modelbinding.AuthenticatedIdempotentHeaders(operation, func(_ context.Context, result Receipt) ([]foundryhttp.ResponseHeader, error) {
+		return []foundryhttp.ResponseHeader{{Name: "Location", Value: foundryhttp.HeaderValue("/orders/" + result.ID.String())}}, nil
 	})
 	return operation.Handle(func(_ context.Context, actor Actor, _ BoundRequest) (idempotency.Scope, error) {
 		return idempotency.NewScope(actor.Tenant, strconv.FormatInt(actor.ID, 10))
@@ -266,15 +265,37 @@ The core supports explicit versioned encoding for non-HTTP operations using
 Manifest version 4 includes replay policy, required key bounds, allowed headers
 and declared outcomes. OpenAPI exports the required header and `Retry-After`.
 Generated TypeScript requests require a branded `IdempotencyKey`. Create it once
-for a submission and retain it with the request. If delivery is uncertain,
-reconcile or retry the same request with the same key:
-
-[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts):
+for a submission and retain it with the request object, as the `idempotencyKey`
+property of an operation your contract declares idempotent. `sdk` is the generated
+client module. If delivery is uncertain, reconcile or retry the same request with
+the same key; never generate another key for the same submission:
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts#submission-key -->
 ```typescript
 export function submissionKey(): sdk.IdempotencyKey {
   return sdk.idempotencyKey(crypto.randomUUID());
+}
+```
+
+Pass the generated operation as `send`, for example
+`(request) => api.ordersCreate(request)`. A definite server answer (`APIError`) is
+returned as is; only an uncertain delivery sends the unchanged request again:
+
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts#idempotent-retry -->
+```typescript
+export async function submitWithRetry<Request extends { idempotencyKey: sdk.IdempotencyKey }, Response>(
+  send: (request: Request) => Promise<Response>,
+  request: Request,
+): Promise<Response> {
+  try {
+    return await send(request);
+  } catch (error) {
+    if (error instanceof sdk.APIError) {
+      throw error;
+    }
+    // Delivery is uncertain: send the same request unchanged, with the same key.
+    return send(request);
+  }
 }
 ```
 

@@ -14,9 +14,7 @@ its `Cron`, `Hourly`, `Daily`, `Weekly` and `Monthly` helpers to inherit
 See [application timezones](application-timezone.md). Existing package functions
 continue to accept an explicit location, and interval schedules measure elapsed time.
 
-Milestone 13 passed native acceptance and consumer review. The
-roadmap owns acceptance
-status. The [independent consumer](../../tests/fixtures/consumer/scheduling/)
+Milestone 13 passed native acceptance and consumer review. The [independent consumer](../../tests/fixtures/consumer/scheduling/)
 demonstrates declarations, injected domain services and kernel assembly.
 
 <a id="recipe-declare-schedule"></a>

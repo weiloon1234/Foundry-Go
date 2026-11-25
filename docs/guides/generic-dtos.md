@@ -1,16 +1,15 @@
 # Generic DTO contracts
 
 T01 passed native verification, consumer/client/compiler/editor acceptance and
-cost measurements. Delivery status belongs to
-the master.
-
-Declare a reusable Go envelope once. Its fields and JSON tags own the wire shape:
+cost measurements.
 
 `UserDTO` denotes your concrete response struct, and `userJSON` is its `contract.JSON[UserDTO]` descriptor returned by the generated `UserDTOJSON()` helper.
 
 The application owns `User` and any generated tables or identities used below.
 
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `contract`, `http`.
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `contract`, `http` as `foundryhttp`.
+
+Declare a reusable Go envelope once. Its fields and JSON tags own the wire shape:
 
 <!-- compiled-source: tests/fixtures/consumer/genericdto/envelope.go#generic-envelope -->
 ```go
@@ -21,15 +20,15 @@ type Envelope[T any] struct {
 }
 ```
 
+Inputs: `userJSON contract.JSON[UserDTO]`.
+
 Generation emits `EnvelopeJSON[T](contract.JSON[T])`, returning
 `contract.JSON[Envelope[T]]`. The function receives the application's concrete
 `UserDTOJSON()` descriptor as `userJSON`:
 
-Inputs: `userJSON contract.JSON[UserDTO]`.
-
 <!-- compiled-source: tests/fixtures/consumer/genericdto/guide_recipes.go#generic-dtos-2 -->
 ```go
-response := http.JSONResponse(200, EnvelopeJSON(userJSON))
+return foundryhttp.JSONResponse(200, EnvelopeJSON(userJSON))
 ```
 
 The [independent consumer](../../tests/fixtures/consumer/genericdto/envelope.go)

@@ -541,9 +541,9 @@ exists in every entry.
 <a id="recipe-table-bindings"></a>
 ### Typed datatable descriptors
 
-Generated entry modules export a frozen `tables` registry for surfaces that define datatables, together with typed identifiers and row helper types:
-
 [Source and imports in the matching GitHub tree](../../tests/fixtures/consumer/clientcontracts/testdata/table-bindings/types.ts).
+
+Generated entry modules export a frozen `tables` registry for surfaces that define datatables, together with typed identifiers and row helper types:
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/table-bindings/types.ts#table-registries -->
 ```typescript
@@ -759,7 +759,7 @@ headers; the static reserved-name policy does not infer those application choice
 JSON, URL-encoded form and multipart encoding, declared status checks, payload limits and errors.
 The transport owns network I/O, credentials and cancellation. Use the optional
 `fetchTransport` exported by every generated client entry when Fetch and Web
-Streams are available:
+Streams are available.
 
 <a id="recipe-fetch-transport"></a>
 ### Connect Fetch
@@ -1553,9 +1553,7 @@ darwin/arm64 and `GOMAXPROCS=16` measured these medians:
 All fixture output hashes matched the original renderer, including full/surface
 entries and shared runtime modules. These are steady-state rendering measurements;
 CLI startup, first-use initialization and fresh-file publication are not timed.
-Allocated bytes describe allocation volume, not peak memory. Exact samples,
-output hashes, source fingerprints and verification are in the
-performance evidence.
+Allocated bytes describe allocation volume, not peak memory.
 
 Inbound idempotency uses the [same runtime policy](idempotent-operations.md) for its
 required typed client key and safe outcomes. Version 3 readers must regenerate.

@@ -1,36 +1,36 @@
 # Authenticated pagination acceptance — 2026-09-28
 
 The starter's B05 gap was valid: pagination retained its HTTP endpoint privately,
-so `http.Authenticated` could not bind it while preserving the typed page handler.
+so `foundryhttp.Authenticated` could not bind it while preserving the typed page handler.
 The framework now provides `pagination.Authenticated(endpoint, binding)` for
 numbered, simple and cursor pages. This is an additive public API; existing
 public pagination signatures and response formats remain compatible.
 
 ## Consumer contract
 
-Configure a `Guarded` page declaration, then bind its concrete actor:
-
-`MemberFilters` is a query struct with `Email value.Optional[string]` tagged `query:"email"`; `MemberResponse` is the response DTO with `ID model.ID[mutatorqueries.Member]`, `Email mutatorqueries.DisplayEmail`, and `Nickname value.Nullable[mutatorqueries.DisplayNickname]` (JSON names `id`, `email`, and `nickname`). The two display types are string-backed model presentation values. Generate the query and response descriptors; `list` is a `pagination.NumberedEndpoint[http.NoPath, MemberFilters, MemberResponse]` declared with guarded access.
+`MemberFilters` is a query struct with `Email value.Optional[string]` tagged `query:"email"`; `MemberResponse` is the response DTO with `ID model.ID[mutatorqueries.Member]`, `Email mutatorqueries.DisplayEmail`, and `Nickname value.Nullable[mutatorqueries.DisplayNickname]` (JSON names `id`, `email`, and `nickname`). The two display types are string-backed model presentation values. Generate the query and response descriptors; `list` is a `pagination.NumberedEndpoint[foundryhttp.NoPath, MemberFilters, MemberResponse]` declared with guarded access.
 
 The application owns `Actor` and `mutatorqueries.Member` and any generated tables or identities used below.
 
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `auth`, `http`, `database/orm`, `http/pagination`.
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `auth`, `http` as `foundryhttp`, `database/orm`, `http/pagination`.
+
+Configure a `Guarded` page declaration, then bind its concrete actor:
 
 <!-- compiled-source: tests/fixtures/consumer/httppagination/authorization_recipe.go#authorized-list-service -->
 ```go
 type authorizedListService interface {
-	AuthorizeList(context.Context, Actor, pagination.Request[http.NoPath, MemberFilters]) error
-	List(context.Context, Actor, pagination.Request[http.NoPath, MemberFilters]) (orm.PageResult[MemberResponse], error)
+	AuthorizeList(context.Context, Actor, pagination.Request[foundryhttp.NoPath, MemberFilters]) error
+	List(context.Context, Actor, pagination.Request[foundryhttp.NoPath, MemberFilters]) (orm.PageResult[MemberResponse], error)
 }
 ```
 
-Inputs: `list pagination.NumberedEndpoint[http.NoPath, MemberFilters, MemberResponse]`, `binding http.GuardBinding[Actor]`, `readScopes auth.AccessScopes[Actor]`, `readPermission auth.Permission[Actor]`, `service authorizedListService`.
+Inputs: `list pagination.NumberedEndpoint[foundryhttp.NoPath, MemberFilters, MemberResponse]`, `binding foundryhttp.GuardBinding[Actor]`, `readScopes auth.AccessScopes[Actor]`, `readPermission auth.Permission[Actor]`, `service authorizedListService`.
 
 <!-- compiled-source: tests/fixtures/consumer/httppagination/authorization_recipe.go#authenticated-pagination-20260928-1 -->
 ```go
-secured := pagination.Authenticated(list, binding, http.Scopes(readScopes), http.Permissions(readPermission))
+secured := pagination.Authenticated(list, binding, foundryhttp.Scopes(readScopes), foundryhttp.Permissions(readPermission))
 secured = pagination.AuthorizeActor(secured, service.AuthorizeList)
-registration := pagination.HandleAuthenticated(secured, service.List)
+return pagination.HandleAuthenticated(secured, service.List)
 ```
 
 `pagination.AuthorizeActor` is optional. Numbered/simple callbacks receive
@@ -66,8 +66,7 @@ call; the focused editor checks and final full gate passed without changing the
 runtime or weakening the expected completions.
 
 Final source review retained the existing HTTP authentication owner and one shared
-pagination completion path. The evidence record
-contains commands, results, source fingerprints and this correction.
+pagination completion path.
 
 ## Starter handoff
 

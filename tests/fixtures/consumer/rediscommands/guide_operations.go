@@ -31,9 +31,8 @@ func rawRanking(ctx context.Context, store *raw.Store, scoreboardKey raw.Key) ([
 	command := raw.NewCommand("ZREVRANGE", raw.DecodeArray(raw.DecodeString())).
 		Key(scoreboardKey).
 		Arg(raw.Int64(0)).Arg(raw.Int64(9)).Arg(raw.Text("WITHSCORES"))
-	ranking, err := command.Run(ctx, store) // []string
+	return command.Run(ctx, store) // []string
 	// doc-example:end redis-commands-2
-	return ranking, err
 }
 
 func visitPipeline(ctx context.Context, store *raw.Store, key raw.Key) error {
@@ -81,7 +80,6 @@ func incrementScript(ctx context.Context, store *raw.Store, key raw.Key) (int64,
 		"return redis.call('INCRBY',KEYS[1],ARGV[1])",
 		key, raw.DecodeInt64(),
 	).Arg(raw.Int64(3))
-	count, err := script.Run(ctx, store)
+	return script.Run(ctx, store)
 	// doc-example:end redis-commands-4
-	return count, err
 }

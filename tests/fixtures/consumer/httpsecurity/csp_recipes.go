@@ -61,9 +61,8 @@ func allowlistedHandler(settings application.Settings, router http.Handler) (htt
 	middleware := foundryhttp.ContentSecurityPolicy(foundryhttp.CSPConfig{
 		Enforce: value.Set(policy),
 	})
-	handler, err := foundryhttp.ApplyMiddleware(router, middleware)
+	return foundryhttp.ApplyMiddleware(router, middleware)
 	// doc-example:end http-content-security-policy-4
-	return handler, err
 }
 
 func renderPage(writer http.ResponseWriter, request *http.Request, page *template.Template) {

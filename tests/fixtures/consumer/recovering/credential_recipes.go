@@ -16,7 +16,6 @@ func issuePasswordSession(ctx context.Context, login *auth.PasswordLogin[Member,
 		return session.Issued[Member, model.ID[Member]]{}, err
 	}
 	// Select the required pending or full assurance flow before issuance.
-	issued, err := sessions.Issue(ctx, result.Proof(), session.IssueOptions{})
+	return sessions.Issue(ctx, result.Proof(), session.IssueOptions{})
 	// doc-example:end issue-password-session
-	return issued, err
 }

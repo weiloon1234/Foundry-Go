@@ -293,7 +293,7 @@ if err != nil {
 
 Add a score.
 
-Inputs: `ctx context.Context`, `member Member`, `groupID models.GroupCode`.
+Inputs: `ctx context.Context`, `member Member`, `groupID models.GroupCode`, `rankings data.SortedSet[models.GroupCode, model.ID[Member]]`.
 
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-6-add -->
 ```go
@@ -305,7 +305,7 @@ if err != nil {
 
 Increment the score.
 
-Inputs: `ctx context.Context`, `member Member`, `groupID models.GroupCode`.
+Inputs: `ctx context.Context`, `member Member`, `groupID models.GroupCode`, `rankings data.SortedSet[models.GroupCode, model.ID[Member]]`.
 
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-6-increment -->
 ```go
@@ -317,7 +317,7 @@ if err != nil {
 
 Read the top ten members.
 
-Inputs: `ctx context.Context`, `groupID models.GroupCode`.
+Inputs: `ctx context.Context`, `groupID models.GroupCode`, `rankings data.SortedSet[models.GroupCode, model.ID[Member]]`.
 
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-6-top -->
 ```go
@@ -329,7 +329,7 @@ if err != nil {
 
 Read one member's rank.
 
-Inputs: `ctx context.Context`, `member Member`, `groupID models.GroupCode`.
+Inputs: `ctx context.Context`, `member Member`, `groupID models.GroupCode`, `rankings data.SortedSet[models.GroupCode, model.ID[Member]]`.
 
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-6-rank -->
 ```go
@@ -341,7 +341,7 @@ if err != nil {
 
 Read a bounded score window.
 
-Inputs: `ctx context.Context`, `groupID models.GroupCode`.
+Inputs: `ctx context.Context`, `groupID models.GroupCode`, `rankings data.SortedSet[models.GroupCode, model.ID[Member]]`.
 
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-6-window -->
 ```go
@@ -353,7 +353,7 @@ if err != nil {
 
 Count the score range.
 
-Inputs: `ctx context.Context`, `groupID models.GroupCode`.
+Inputs: `ctx context.Context`, `groupID models.GroupCode`, `rankings data.SortedSet[models.GroupCode, model.ID[Member]]`.
 
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-6-count -->
 ```go
@@ -444,10 +444,10 @@ an element that then fails JSON decoding is reported as an error and stays remov
 
 ## Existence, expiry and deletion
 
+Inputs: `ctx context.Context`, `member Member`, `groups MemberGroups`.
+
 Every handle exposes `Exists`, `Expire`, `.Count`, `Delete` and `DeleteMany` while
 retaining the declaration's resource key type:
-
-Inputs: `ctx context.Context`, `member Member`, `groups MemberGroups`.
 
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-8 -->
 ```go

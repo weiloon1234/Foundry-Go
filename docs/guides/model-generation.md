@@ -91,14 +91,14 @@ the existing descriptor; naming collisions abort generation. See
 
 ### Request headers on query declarations
 
-Use `header:"Explicit-Name"` on a `//foundry:query` field to declare a request
-header alongside URL query parameters:
-
 The application owns `User` and any generated tables or identities used below.
 
 `models.Status` is the application's string-backed `//foundry:enum`, with `StatusActive = "active"` and `StatusDisabled = "disabled"`; generate its enum descriptor with the model package.
 
 Framework imports from `github.com/weiloon1234/Foundry-Go`: `value`.
+
+Use `header:"Explicit-Name"` on a `//foundry:query` field to declare a request
+header alongside URL query parameters:
 
 <!-- compiled-source: tests/fixtures/consumer/httpquery/request_headers.go#model-generation-1 -->
 ```go

@@ -279,7 +279,7 @@ only present scalar values:
 ```go
 func MeasurementScoreFilter() datatable.FilterSource[models.Measurement, value.Nullable[float64]] {
 	score := expr.OrderNullableRow(expr.Value(models.Measurements.Score))
-	return datatable.NullableWhere(http.FloatQuery[float64](), expr.NullableOrderFilter(score))
+	return datatable.NullableWhere(foundryhttp.FloatQuery[float64](), expr.NullableOrderFilter(score))
 }
 ```
 
@@ -443,7 +443,7 @@ func ReferralTextFilters() (datatable.FilterSource[ReferralScope, value.Nullable
 		expr.At(rows.Scope(sponsors), models.Users.ID),
 	))
 	sponsor := rows.NullableRightScope(joined, rows.Scope(sponsors))
-	text := http.StringQuery[string]()
+	text := foundryhttp.StringQuery[string]()
 	email := expr.TextNullableRowValue(expr.AtNullable(sponsor, models.Users.Email))
 	nickname := expr.TextNullableRowValue(expr.AtNullableValue(sponsor, models.Users.Nickname))
 	return datatable.NullableWhere(text, expr.NullableTextFilter(email)),
@@ -1034,7 +1034,7 @@ Build one configuration per route group and reuse it for the group's tables:
 
 <!-- compiled-source: tests/fixtures/consumer/reports/datatable_routes.go#table-routes-config -->
 ```go
-func TableRoutesConfig(manager *datatable.Manager, guard http.GuardBinding[reporting.Operator], tokens *token.Tokens[reporting.Operator, model.ID[reporting.Operator]], clock clock.Clock, quota http.Middleware) datatable.RoutesConfig[reporting.Operator, reporting.Authority] {
+func TableRoutesConfig(manager *datatable.Manager, guard foundryhttp.GuardBinding[reporting.Operator], tokens *token.Tokens[reporting.Operator, model.ID[reporting.Operator]], clock clock.Clock, quota foundryhttp.Middleware) datatable.RoutesConfig[reporting.Operator, reporting.Authority] {
 	return datatable.RoutesConfig[reporting.Operator, reporting.Authority]{
 		Manager: manager,
 		Guard:   guard,

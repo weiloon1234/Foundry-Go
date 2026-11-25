@@ -13,7 +13,6 @@ func userURL(user models.User) (string, error) {
 		UserPathDescriptor(),
 	)
 	ShowUser = foundryhttp.ConfigureRoute(ShowUser, foundryhttp.Within(foundryhttp.DefineScope("/api", "api")))
-	location, err := foundryhttp.RouteURL(ShowUser, UserPath{User: user.ID})
+	return foundryhttp.RouteURL(ShowUser, UserPath{User: user.ID})
 	// doc-example:end generated-user-url
-	return location, err
 }

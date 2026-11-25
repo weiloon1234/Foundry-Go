@@ -239,5 +239,4 @@ replay/live admission overlap, reconnects, safe multi-tab presence, global and s
 limits, typed revocation, TTL process loss, corruption/policy rejection, replay
 count/byte/TTL bounds, transport gaps, idle revocation, heartbeat, rate limiting,
 shutdown drain, slow queues and ownership under blocked callbacks. Compiler-negative
-and real-gopls consumer cases cover the new typed public boundaries. The master evidence
-records the completed acceptance gate and review corrections.
+and real-gopls consumer cases cover the new typed public boundaries.

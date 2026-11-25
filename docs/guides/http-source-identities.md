@@ -8,9 +8,9 @@ reflection reports `main.Code`, while generation knows the actual module path.
 Model IDs whose type argument belongs to `main` retain that argument's source
 namespace as well.
 
-Declare ordinary types and let generation supply the metadata:
-
 These recipes need no application model; the transport and helper types they use are declared or described on this page.
+
+Declare ordinary types and let generation supply the metadata:
 
 <!-- compiled-source: tests/fixtures/consumer/httpquery/source_identity.go#priority-source-types -->
 ```go

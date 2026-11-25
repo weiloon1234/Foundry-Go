@@ -167,8 +167,7 @@ Use the relevant injected service/custom rule for those application requirements
 Rules do not implement Laravel's dynamic string coercions or field exclusion.
 Request-locale message translation and replacement of static built-in messages
 are delivered in the separate [message follow-up](validation-messages.md).
-The expansion passed the complete gate and relevant races; see
-acceptance evidence.
+The expansion passed the complete gate and relevant races.
 
 
 The ORM examples are checked against the [compiled guide examples](../../tests/fixtures/goway/guideadapters) and the linked consumer sources.

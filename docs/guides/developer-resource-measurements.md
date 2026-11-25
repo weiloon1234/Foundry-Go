@@ -2,8 +2,7 @@
 
 Foundation native measurements passed on 2026-09-17 against an independent private module
 candidate. The [C05 continuation results](#consumer-startup-c05-native-results) below
-add configured startup and runtime measurements. Recorded results contain the raw
-phase timings, memory samples and generated sizes; interpretation follows below.
+add configured startup and runtime measurements. Interpretation follows below.
 Historical acceptance durations and constrained VM runs remain separate evidence.
 
 After the [release preparation](../release-checklist.md), run:
@@ -38,7 +37,6 @@ toolchain selection, and uses ordinary native compiler defaults. `-mod=readonly`
 controls dependency changes; it does not change compiler optimization.
 
 Format-3 candidates add a separate Go-way consumer for package/source acceptance.
-Its performance is measured by the synthetic harness.
 The release measurement profiles remain the following three, as in format 2.
 Historical format-1 candidates have ordinary/full only and remain supported:
 
@@ -272,8 +270,7 @@ the [acceptance guide](consumer-startup-acceptance.md#final-acceptance-boundarie
 
 The [2026-09-18 review](performance-security-review.md) records fresh ordinary,
 configured and full-consumer profiles, five-sample before/after cache and stream
-measurements, and three-sample runtime checks. Its native evidence
-retains cold, unchanged and edited builds, real editor timings and RSS. Historical
+measurements, and three-sample runtime checks. Historical
 C05 numbers above remain unchanged.
 ## Typed field capability regression
 
