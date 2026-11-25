@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/internal/docsource"
+	"github.com/weiloon1234/Foundry-Go/internal/docsource/markdown"
 )
 
 func main() {
@@ -63,8 +64,20 @@ func run(root string, check bool, guides ...string) error {
 		if string(document.Original) == string(document.Rendered) {
 			continue
 		}
-		if err := os.WriteFile(filepath.Join(root, document.Path), document.Rendered, 0644); err != nil {
+		file, err := markdown.OpenRegular(root, document.Path, os.O_WRONLY)
+		if err != nil {
 			return err
+		}
+		err = file.Truncate(0)
+		if err == nil {
+			_, err = file.Write(document.Rendered)
+		}
+		closeErr := file.Close()
+		if err != nil {
+			return err
+		}
+		if closeErr != nil {
+			return closeErr
 		}
 	}
 	return nil

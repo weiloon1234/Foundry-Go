@@ -6,11 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
+	"github.com/weiloon1234/Foundry-Go/internal/docsource/markdown"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
@@ -36,10 +36,11 @@ func CheckTypeScriptInputs(root string, documents []Document) error {
 		}
 	}
 	for manifest, directory := range manifests {
-		data, err := os.ReadFile(filepath.Join(root, manifest))
+		data, err := markdown.ReadFile(root, manifest, markdown.MaxManifestBytes)
 		if err != nil {
 			return err
 		}
+		locations := markdown.NewLines(data)
 		var names []string
 		if err := json.Unmarshal(data, &names); err != nil {
 			line := 0
@@ -53,16 +54,16 @@ func CheckTypeScriptInputs(root string, documents []Document) error {
 				offset = valueType.Offset
 			}
 			if offset > 0 {
-				line = bytes.Count(data[:offset-1], []byte("\n")) + 1
+				line = locations.Number(int(offset - 1))
 			}
-			return fmt.Errorf("%s:%d: invalid compiler input JSON: %v; write a JSON array of TypeScript filenames.", manifest, line, err)
+			return safeerror.Owned(fmt.Sprintf("%s:%d: invalid compiler input JSON: syntax or type error; write a JSON array of TypeScript filenames.", manifest, line), err)
 		}
 		offset := 0
 		for _, name := range names {
 			line := 0
 			if index := bytes.Index(data[offset:], []byte(strconv.Quote(name))); index >= 0 {
 				offset += index
-				line = bytes.Count(data[:offset], []byte("\n")) + 1
+				line = locations.Number(offset)
 				offset += len(strconv.Quote(name))
 			}
 			if filepath.Base(name) != name || strings.ContainsAny(name, `/\`) || !strings.HasSuffix(name, ".ts") || strings.HasSuffix(name, ".d.ts") {
@@ -87,7 +88,11 @@ func CheckGoInputs(root string, documents []Document, input io.Reader) error {
 	if err != nil {
 		return err
 	}
-	decoder := json.NewDecoder(input)
+	data, err := markdown.ReadAll("fixture compiler inputs", input, markdown.MaxManifestBytes)
+	if err != nil {
+		return err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
 	for {
 		var pkg struct {
 			Dir                                          string
@@ -100,7 +105,7 @@ func CheckGoInputs(root string, documents []Document, input io.Reader) error {
 			break
 		}
 		if err != nil {
-			return fmt.Errorf("fixture compiler inputs:0: invalid JSON near byte %d: %v; regenerate the list with go list -json in the fixture module.", decoder.InputOffset(), err)
+			return safeerror.Owned(fmt.Sprintf("fixture compiler inputs:0: invalid JSON near byte %d; regenerate the list with go list -json in the fixture module.", decoder.InputOffset()), err)
 		}
 		if pkg.Incomplete || pkg.Error != nil || !filepath.IsAbs(pkg.Dir) {
 			return safeerror.New(fmt.Sprintf("fixture compiler inputs: incomplete package %q; regenerate the input list with go list -json in the fixture module.", pkg.Dir))

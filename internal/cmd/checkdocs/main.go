@@ -2,8 +2,6 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
 	"errors"
 	"flag"
 	"fmt"
@@ -17,11 +15,11 @@ import (
 
 	"github.com/weiloon1234/Foundry-Go/internal/docrefs"
 	"github.com/weiloon1234/Foundry-Go/internal/docsource"
+	"github.com/weiloon1234/Foundry-Go/internal/docsource/markdown"
 	"github.com/weiloon1234/Foundry-Go/internal/retirement"
 )
 
 var (
-	inlineLink    = regexp.MustCompile(`\[[^\]]*\]\(([^)]+)\)`)
 	blueprintName = regexp.MustCompile(`^([0-9]{2})-.+\.md$`)
 )
 
@@ -48,7 +46,7 @@ func run(root, inputs string) error {
 	if err != nil {
 		return err
 	}
-	file, err := os.Open(inputs)
+	file, err := markdown.OpenRegular(filepath.Dir(inputs), filepath.Base(inputs), os.O_RDONLY)
 	if err != nil {
 		return err
 	}
@@ -57,6 +55,11 @@ func run(root, inputs string) error {
 }
 
 func checkRepository(root string) error {
+	checker, err := retirement.NewDocumentChecker(true)
+	if err != nil {
+		return err
+	}
+	targets := docrefs.NewPages(root)
 	var failures []error
 	var references []docrefs.Reference
 	agentLines := make(map[string]map[int]bool)
@@ -68,7 +71,7 @@ func checkRepository(root string) error {
 		failures = append(failures, docsource.CheckBindings(documents), docsource.Check(documents), docsource.CheckTypeScriptInputs(root, documents))
 		for _, document := range documents {
 			path := filepath.Join(root, filepath.FromSlash(document.Path))
-			_, err := docrefs.IndexAnchors(path, document.Original)
+			_, err := targets.Index(path, document.Original)
 			failures = append(failures, err)
 			lines := make(map[int]bool, len(document.AgentLines))
 			for _, line := range document.AgentLines {
@@ -122,21 +125,25 @@ func checkRepository(root string) error {
 			active := currentGuide(root, path) || entry.Name() == "AGENTS.md" || entry.Name() == "README.md" && !strings.HasPrefix(relative, "blueprint/") && !strings.HasPrefix(relative, "docs/evidence/") && !strings.Contains(relative, "/testdata/")
 			skill := strings.HasPrefix(relative, ".claude/skills/")
 			if active || skill {
-				data, err := os.ReadFile(path)
+				relativeName, relErr := filepath.Rel(root, path)
+				if relErr != nil {
+					return relErr
+				}
+				data, err := markdown.ReadFile(root, relativeName, markdown.MaxDocumentBytes)
 				if err != nil {
 					return err
 				}
 				parsed, err := docrefs.Parse(relative, data)
 				references = append(references, parsed...)
 				failures = append(failures, err)
-				if active {
+				if active || skill {
 					failures = append(failures, checkModelGuide(relative, data))
-					if err := retirement.CheckDocument(relative, data); err != nil {
+					if err := checker.Check(relative, data); err != nil {
 						failures = append(failures, err)
 					}
 				}
 			}
-			if err := checkDocument(root, path, currentGuide(root, path), completed, agentLines[path]); err != nil {
+			if err := checkDocument(root, path, currentGuide(root, path), completed, agentLines[path], targets); err != nil {
 				failures = append(failures, err)
 			}
 		}
@@ -153,7 +160,7 @@ func checkRepository(root string) error {
 	if err != nil {
 		failures = append(failures, err)
 	}
-	failures = append(failures, docrefs.CheckReferences(filepath.Join(root, "docs", "guides"), references))
+	failures = append(failures, targets.CheckReferences(filepath.Join(root, "docs", "guides"), references))
 	return errors.Join(failures...)
 }
 
@@ -184,7 +191,7 @@ func checkBlueprints(root string) error {
 }
 
 func goRequirement(path string) (string, error) {
-	data, err := os.ReadFile(path)
+	data, err := markdown.ReadPath(path, markdown.MaxManifestBytes)
 	if err != nil {
 		return "", err
 	}
@@ -197,22 +204,33 @@ func goRequirement(path string) (string, error) {
 	return "", fmt.Errorf("%s:0: missing Go requirement; add the go directive matching the root go.mod.", path)
 }
 
-func checkDocument(root, path string, current bool, completed map[string]bool, agentLines map[int]bool) error {
-	data, err := os.ReadFile(path)
+func checkDocument(root, path string, current bool, completed map[string]bool, agentLines map[int]bool, targets *docrefs.Pages) error {
+	relative, err := filepath.Rel(root, path)
 	if err != nil {
 		return err
 	}
-	definitions := linkDefinitions(data)
+	data, err := markdown.ReadFile(root, relative, markdown.MaxDocumentBytes)
+	if err != nil {
+		return err
+	}
+	parsed := markdown.Read(data)
 	var failures []error
-	scanner := bufio.NewScanner(bytes.NewReader(data))
-	scanner.Buffer(make([]byte, 4096), 1024*1024)
-	fence := ""
-	lineNumber := 0
-	var paragraph []string
-	paragraphLine := 0
-	flushParagraph := func() {
-		if current && len(paragraph) > 0 {
-			for _, match := range pendingMilestone.FindAllStringSubmatch(strings.Join(paragraph, " "), -1) {
+	if current {
+		inlineIndex := 0
+		for _, block := range parsed.Blocks {
+			if block.Kind != markdown.Prose {
+				continue
+			}
+			var prose strings.Builder
+			for inlineIndex < len(parsed.Inlines) && parsed.Inlines[inlineIndex].Start < block.End {
+				node := parsed.Inlines[inlineIndex]
+				inlineIndex++
+				if node.Kind == markdown.Text && node.Start >= block.Start && node.End <= block.End {
+					prose.WriteString(node.Text)
+					prose.WriteByte(' ')
+				}
+			}
+			for _, match := range pendingMilestone.FindAllStringSubmatch(prose.String(), -1) {
 				number := match[1]
 				if number == "" {
 					number = match[2]
@@ -221,37 +239,18 @@ func checkDocument(root, path string, current bool, completed map[string]bool, a
 					number = "0" + number
 				}
 				if completed[number] {
-					failures = append(failures, fmt.Errorf("%s:%d: future-work claim names completed milestone %s; describe its current API or move dated evidence to a dated record", path, paragraphLine, number))
+					failures = append(failures, fmt.Errorf("%s:%d: future-work claim names completed milestone %s; describe its current API or move dated evidence to a dated record", path, block.First, number))
 				}
 			}
 		}
-		paragraph = nil
 	}
-	for scanner.Scan() {
-		lineNumber++
-		line := scanner.Text()
-		trimmed := strings.TrimSpace(line)
-		if fence != "" {
-			if docsource.ClosesFence(line, fence) {
-				fence = ""
-			}
+	for _, node := range parsed.Inlines {
+		if node.Kind != markdown.Link {
 			continue
 		}
-		if marker, _ := docsource.FenceStart(line); marker != "" {
-			flushParagraph()
-			fence = marker
-			continue
-		}
-		masked := docsource.MaskInlineCode(line)
-		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
-			flushParagraph()
-		} else if current {
-			if len(paragraph) == 0 {
-				paragraphLine = lineNumber
-			}
-			paragraph = append(paragraph, strings.Join(strings.Fields(masked), " "))
-		}
-		for _, destination := range linkDestinations(masked, definitions) {
+		lineNumber := node.First
+		destination := node.Destination
+		{
 			target := strings.Trim(strings.TrimSpace(destination), "<>")
 			link, err := url.Parse(target)
 			if err != nil {
@@ -299,32 +298,13 @@ func checkDocument(root, path string, current bool, completed map[string]bool, a
 				continue
 			}
 			if explicit {
-				if err := checkExplicitFragment(path, lineNumber, local, link.Fragment); err != nil {
+				if err := checkExplicitFragment(targets, path, lineNumber, local, link.Fragment); err != nil {
 					failures = append(failures, err)
 				}
 			}
 		}
 	}
-	flushParagraph()
-	if err := scanner.Err(); err != nil {
-		failures = append(failures, fmt.Errorf("%s:%d: cannot read document: %v; shorten the line or restore read access.", path, lineNumber, err))
-	}
 	return errors.Join(failures...)
-}
-
-func checkExplicitFragment(source string, line int, target, fragment string) error {
-	data, err := os.ReadFile(target)
-	if err != nil {
-		return fmt.Errorf("%s:%d: fragment target %s: %v; restore the linked file or correct the link.", source, line, target, err)
-	}
-	anchors, err := docrefs.IndexAnchors(target, data)
-	if err != nil {
-		return err
-	}
-	if err := anchors.CheckFragment(source, line, fragment); err != nil {
-		return fmt.Errorf("%w (target %s)", err, target)
-	}
-	return nil
 }
 
 func historicalTeachingTarget(root, source, target string) bool {
@@ -339,7 +319,7 @@ func historicalTeachingTarget(root, source, target string) bool {
 }
 
 func goRequirementLine(path string) int {
-	data, err := os.ReadFile(path)
+	data, err := markdown.ReadPath(path, markdown.MaxManifestBytes)
 	if err != nil {
 		return 0
 	}

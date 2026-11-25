@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 //go:embed denied.json document_rules.json
@@ -29,7 +30,7 @@ type retiredDeclaration struct {
 	Replacement string `json:"replacement,omitempty"`
 }
 
-func retiredDeclarations() (map[string][]retiredDeclaration, error) {
+var retiredDeclarations = sync.OnceValues(func() (map[string][]retiredDeclaration, error) {
 	data, err := ledger.ReadFile("denied.json")
 	if err != nil {
 		return nil, err
@@ -37,7 +38,7 @@ func retiredDeclarations() (map[string][]retiredDeclaration, error) {
 	var result map[string][]retiredDeclaration
 	err = json.Unmarshal(data, &result)
 	return result, err
-}
+})
 
 func declarations() (map[string][]string, error) {
 	entries, err := retiredDeclarations()

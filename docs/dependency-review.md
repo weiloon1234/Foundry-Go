@@ -21,6 +21,7 @@ copying, notice and patent files for the actual build.
 | x/crypto, x/net, x/sys, x/sync, x/text | Existing cryptographic, network, system, concurrency and text primitives. HTTP connection limits reuse x/net's LimitListener instead of adding another implementation. |
 | brotli, gen2brain/vpx (WebP), gift, gav1d, x/image | Compression/image decoding and transforms. Malformed media, input dimensions, intermediate size, cancellation and codec-specific limits remain the framework boundary. |
 | bluemonday/douceur/css | Existing HTML sanitization; retain the established library rather than introducing a second sanitizer. |
+| github.com/yuin/goldmark v1.8.7 | Direct dependency for the shared CommonMark/GFM AST reader used by documentation binding, rendering, retirement, references and links. Pure Go with no dependencies of its own. MIT licence, copyright 2019 Yusuke Inuzuka; retain its LICENSE in dependency notice inventories. |
 | TOML, semver, cron | Configuration parsing, plugin requirements and schedule parsing. Review malformed input bounds and compatibility, not only successful examples. |
 
 At the milestone 24 review, all 42 pinned root modules had cached top-level license/copying/notice files in
@@ -59,8 +60,8 @@ than calling them function-level reachability evidence. Repeat affected tests
 after upgrades and complete the final source gate. Missing scanner execution,
 unsupported toolchains or absent database access leave review incomplete.
 
-Root runtime requirements are unchanged. No dependency was installed during
-source preparation. During verification, the user explicitly approved installing
+At the milestone 24 review, root runtime requirements were unchanged and no
+dependency was installed during source preparation. During verification, the user explicitly approved installing
 govulncheck v1.8.0 into the private milestone tool directory. The release module
 now selects x/mod v0.41.0, already obtained with that scanner, after module-only
 advisories against its initial older revision. Its ordinary tests/vet and updated vulnerability scan passed without findings.

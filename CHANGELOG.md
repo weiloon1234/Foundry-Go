@@ -2,15 +2,17 @@
 
 ## Unreleased
 
-- Documentation uses one compiled-source marker with standalone source regions.
-  Every Go, TypeScript and TSX block in guides, instructions and skills requires
-  a binding; repeated inclusion of the same source region is allowed. Every fence
-  requires a supported language tag; indented and HTML code blocks are refused.
-  Text and Markdown receive best-effort code checks, including nested executable
-  fences. Regions cannot start or finish with a bare comment separator.
-- Removed the ORM migration guide and historical teaching exemptions. Current
-  examples live in task guides; the ledger records documented replacements and
-  diagnostics report them, or state that none is recorded.
+- Before upgrading the application pin, retarget any `Foundry guides:` declaration
+  naming `orm-migration` to a current task guide. The migration page is removed.
+  Documentation diagnostics have new wording and report recorded replacements;
+  replacement metadata adds no retirement-name, arity or chain rule.
+- Compiled-source bindings, the closed fence-tag list, and the restrictions on
+  indented code and HTML `pre`/`code` elements apply to the framework's own
+  guides, instructions and skills. An application's `foundry docs check` does
+  **not** enforce these binding, tag or block rules in this release and does not
+  require framework fixture sources.
+- Documentation readers share the Goldmark v1.8.7 Markdown parser (MIT licence),
+  with bounded regular-file inputs and repository-confined rendering.
 - Client guides use compiled, framework-neutral TypeScript examples. UI hooks
   remain application-owned, and the framework adds no React or TSX dependency.
 

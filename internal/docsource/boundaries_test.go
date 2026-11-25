@@ -9,7 +9,7 @@ import (
 
 func TestIndentationColumnsAndHTMLOpenings(t *testing.T) {
 	for _, body := range []string{
-		" \tconst x: number = 1;", "  \toutput", "   \toutput", ">  \toutput",
+		" \tconst x: number = 1;", "  \toutput", "   \toutput",
 		"<pre/>const x: number = 1;</pre>", "<code/>amount = 2</code>",
 		"<pre class=example/>output</pre>", "<code class=example>output</code>",
 		"<PRE data-language='go'>output</PRE>", "<code\nclass=example>output</code>",
@@ -23,7 +23,7 @@ func TestIndentationColumnsAndHTMLOpenings(t *testing.T) {
 			t.Fatalf("accepted block %q: %v", body, err)
 		}
 	}
-	doc, err := parseDocument("guide.md", []byte("# Guide\n\n   Three-space prose.\n"), nil)
+	doc, err := parseDocument("guide.md", []byte("# Guide\n\n   Three-space prose.\n\n>  \toutput\n"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

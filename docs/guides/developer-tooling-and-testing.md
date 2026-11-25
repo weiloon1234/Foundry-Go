@@ -71,8 +71,10 @@ inclusions retain their boundary blank lines. All other source lines and whitesp
 remain intact. Render and read-only `--check` use these same rules.
 A named region cannot begin or end with a bare `//` separator: move the marker
 outside the comment group, or include the whole comment.
-It derives `go` or `typescript` from
-the extension and uses a backtick delimiter longer than any run in the excerpt.
+It requires the fence tag to match the source extension (`go` or `typescript`).
+It rewrites only the bound fence body and preserves every other byte, including
+the opening and closing delimiters. If an excerpt would close the fence, the
+renderer asks the author to choose a longer delimiter.
 It adds the newline needed to close a fence when a whole source file lacks one.
 It never renames symbols, repairs calls or inserts ellipses.
 
@@ -90,7 +92,21 @@ fences. The other data and command tags remain a declared contract, without
 content detection. Use `text` only for output and plain text; bind executable
 examples to compiled source. There are
 no per-document exceptions or directory-name exclusions inside teaching roots,
-and those roots cannot contain symlinks.
+and those roots and their ancestors inside the repository cannot be symlinks.
+Instruction, guide, skill, source and manifest inputs must be regular files.
+The renderer opens files through a repository-confined filesystem root.
+
+One Goldmark AST reader supplies block, container, link, anchor and inline syntax
+to all documentation checks. A binding comment must be the immediately preceding
+node in the same container. Comments containing apparent code remain comments.
+Each input or rendered document is limited to 4 MiB, each source file to 8 MiB and each compiler-input
+manifest or stream to 16 MiB. Teaching-source loading (including rendered bytes) and the anchor cache each
+allow at most 128 MiB per run; each permits at most 4096 documents or targets.
+Oversized inputs fail with the limit in the diagnostic. Retirement rules compile
+once per command run, and each link target's anchors are indexed once.
+
+These binding, tag and block restrictions apply to the framework's documents.
+An application's `foundry docs check` does not enforce them in this release.
 
 `renderdocs --check` checks source equality. `checkdocs`, including its
 `--go-inputs` mode, additionally reports every unbound block. Historical records in `docs/evidence`, blueprints and the changelog

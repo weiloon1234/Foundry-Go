@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"os"
+	"github.com/weiloon1234/Foundry-Go/internal/docsource/markdown"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -15,7 +15,7 @@ var (
 
 func completedMilestones(root string) (map[string]bool, error) {
 	path := filepath.Join(root, "blueprint", "00-master-architecture-and-parity.md")
-	data, err := os.ReadFile(path)
+	data, err := markdown.ReadFile(root, "blueprint/00-master-architecture-and-parity.md", markdown.MaxDocumentBytes)
 	if err != nil {
 		return nil, err
 	}

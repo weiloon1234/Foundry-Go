@@ -3,12 +3,11 @@ package docsource
 
 import (
 	"fmt"
-	"os"
 	"path"
-	"path/filepath"
 	"regexp"
 	"strings"
 
+	"github.com/weiloon1234/Foundry-Go/internal/docsource/markdown"
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
@@ -20,6 +19,7 @@ type excerpt struct {
 }
 
 type source struct {
+	bytes    int
 	language string
 	whole    excerpt
 	regions  map[string]excerpt
@@ -39,19 +39,7 @@ func readSource(root, name string) (source, error) {
 	if !approved || strings.Contains(name, "_foundry.gen.") {
 		return source{}, safeerror.New(fmt.Sprintf("source %q is outside approved handwritten fixture inputs", name))
 	}
-	// Reject aliases as well as escapes, so one file cannot acquire two owners.
-	current := root
-	for _, part := range strings.Split(name, "/") {
-		current = filepath.Join(current, part)
-		info, err := os.Lstat(current)
-		if err != nil {
-			return source{}, err
-		}
-		if info.Mode()&os.ModeSymlink != 0 {
-			return source{}, safeerror.New(fmt.Sprintf("source %q contains a symlink", name))
-		}
-	}
-	data, err := os.ReadFile(current)
+	data, err := markdown.ReadFile(root, name, markdown.MaxSourceBytes)
 	if err != nil {
 		return source{}, err
 	}
@@ -61,12 +49,14 @@ func readSource(root, name string) (source, error) {
 	}
 	parsed, err := parseSource(string(data), language)
 	if err != nil {
-		return source{}, fmt.Errorf("%s:%s", name, strings.TrimPrefix(err.Error(), "line "))
+		return source{}, safeerror.New(fmt.Sprintf("%s:%s", name, strings.TrimPrefix(err.Error(), "line ")))
 	}
+	parsed.bytes = len(data)
 	return parsed, nil
 }
 
 func parseSource(data, language string) (source, error) {
+	locations := markdown.NewLines([]byte(data))
 	comments := lineComments(data, language)
 	for offset := 0; offset < len(data); {
 		n := strings.Index(data[offset:], "// doc-example:")
@@ -75,7 +65,7 @@ func parseSource(data, language string) (source, error) {
 		}
 		offset += n
 		if !comments[offset] {
-			return source{}, safeerror.New(fmt.Sprintf("line %d: region marker must be an actual line comment, outside literals and block comments; move the marker outside the literal or block comment.", strings.Count(data[:offset], "\n")+1))
+			return source{}, safeerror.New(fmt.Sprintf("line %d: region marker must be an actual line comment, outside literals and block comments; move the marker outside the literal or block comment.", locations.Number(offset)))
 		}
 		offset += len("// doc-example:")
 	}
@@ -177,27 +167,4 @@ func dedent(data string) string {
 		lines[i] = line[n:]
 	}
 	return strings.Join(lines, "")
-}
-
-func renderFence(language, data string, finalNewline bool) string {
-	width, run := 3, 0
-	for _, c := range data {
-		if c == '`' {
-			run++
-			if run >= width {
-				width = run + 1
-			}
-		} else {
-			run = 0
-		}
-	}
-	delimiter := strings.Repeat("`", width)
-	if data != "" && !strings.HasSuffix(data, "\n") {
-		data += "\n"
-	}
-	rendered := delimiter + language + "\n" + data + delimiter
-	if finalNewline {
-		rendered += "\n"
-	}
-	return rendered
 }

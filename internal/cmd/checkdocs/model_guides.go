@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/weiloon1234/Foundry-Go/internal/docsource"
+	"github.com/weiloon1234/Foundry-Go/internal/docsource/markdown"
 )
 
 // Retired directives and public names belong to retirement.CheckDocument. These
@@ -20,43 +20,53 @@ var generatedModelTeaching = regexp.MustCompile(`\b(?:models|reports)\.\w+Fields
 const modelReferenceMarker = "<!-- model-declaration-reference -->"
 
 func checkModelGuide(name string, data []byte) error {
-	doc := string(data)
-	if match := generatedModelTeaching.FindStringIndex(doc); match != nil {
-		line := strings.Count(doc[:match[0]], "\n") + 1
-		return fmt.Errorf("%s:%d: guide teaches a retired generated model/query API; declare models with //foundry:model and foundry tags, then use their generated tables.", name, line)
-	}
-	lines := strings.Split(doc, "\n")
-	for i := 0; i < len(lines); i++ {
-		reference := strings.TrimSpace(lines[i]) == modelReferenceMarker
-		if reference {
-			if i+2 >= len(lines) || !strings.HasPrefix(strings.TrimSpace(lines[i+1]), "<!-- compiled-source: ") {
-				return fmt.Errorf("%s:%d: model-declaration-reference must immediately precede one compiled-source Go fence; move the marker directly before its compiled-source marker.", name, i+1)
+	parsed := markdown.Read(data)
+	nodes := append(append([]markdown.Node(nil), parsed.Blocks...), parsed.Inlines...)
+	for _, node := range nodes {
+		if node.Kind != markdown.Fence && node.Kind != markdown.Indented && node.Kind != markdown.CodeSpan && node.Kind != markdown.Text {
+			continue
+		}
+		if match := generatedModelTeaching.FindStringIndex(node.Text); match != nil {
+			line := node.First + strings.Count(node.Text[:match[0]], "\n")
+			if node.Kind == markdown.Fence {
+				line++
 			}
-			source := strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(lines[i+1]), "<!-- compiled-source: "), " -->")
+			return fmt.Errorf("%s:%d: guide teaches a retired generated model/query API; declare models with //foundry:model and foundry tags, then use their generated tables.", name, line)
+		}
+	}
+	reference := false
+	sourceMarker := false
+	for _, block := range parsed.Blocks {
+		trimmed := strings.TrimSpace(block.Text)
+		if block.Kind == markdown.Comment && trimmed == modelReferenceMarker {
+			reference = true
+			sourceMarker = false
+			continue
+		}
+		if reference && !sourceMarker {
+			if block.Kind != markdown.Comment || !strings.HasPrefix(trimmed, "<!-- compiled-source: ") {
+				return fmt.Errorf("%s:%d: model-declaration-reference must immediately precede one compiled-source Go fence; move the marker directly before its compiled-source marker.", name, block.First)
+			}
+			source := strings.TrimSuffix(strings.TrimPrefix(trimmed, "<!-- compiled-source: "), " -->")
 			source, _, _ = strings.Cut(source, "#")
 			if !strings.HasSuffix(source, "_test.go") && !strings.HasSuffix(source, "_foundry.gen.go") && !strings.HasPrefix(source, "database/orm/") {
-				return fmt.Errorf("%s:%d: model-declaration-reference requires generated code, a test file or the ORM owner source; bind an eligible source file.", name, i+1)
+				return fmt.Errorf("%s:%d: model-declaration-reference requires generated code, a test file or the ORM owner source; bind an eligible source file.", name, block.First)
 			}
-			i += 2
-		}
-		marker, language := docsource.FenceStart(lines[i])
-		if reference && (marker == "" || language != "go") {
-			return fmt.Errorf("%s:%d: model-declaration-reference requires a compiled-source Go fence; add a Go fence directly after the compiled-source marker.", name, i+1)
-		}
-		if marker == "" {
+			sourceMarker = true
 			continue
 		}
-		start := i + 1
-		for i++; i < len(lines) && !docsource.ClosesFence(lines[i], marker); i++ {
+		if reference && (block.Kind != markdown.Fence || block.Info != "go") {
+			return fmt.Errorf("%s:%d: model-declaration-reference requires a compiled-source Go fence; add a Go fence directly after the compiled-source marker.", name, block.First)
 		}
-		if language != "go" || reference {
-			continue
+		if block.Kind == markdown.Fence && block.Info == "go" && !reference && handwrittenModelDeclaration(block.Text) {
+			return fmt.Errorf("%s:%d: handwritten model declaration teaching; declare the model with //foundry:model and foundry tags, then run foundry generate", name, block.First+1)
 		}
-		code := strings.Join(lines[start:i], "\n")
-		if handwrittenModelDeclaration(code) {
-			return fmt.Errorf("%s:%d: handwritten model declaration teaching; declare the model with //foundry:model and foundry tags, then run foundry generate", name, start+1)
-		}
+		reference = false
 	}
+	if reference {
+		return fmt.Errorf("%s:0: model-declaration-reference must immediately precede one compiled-source Go fence", name)
+	}
+
 	return nil
 }
 

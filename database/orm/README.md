@@ -596,7 +596,7 @@ Source failures, including panic and Goexit, are retained by the declaration;
 every later scoped operation returns the failure without executing SQL.
 Context values are explicit typed request metadata. There is no service registry
 in the context. Every terminal uses its executing context; `WithScopeContext(q,
-ctx)` only supplies context for `Compile` and inspection.
+ctx)` only supplies context for `orm.Compile` and inspection.
 
 Scopes apply through the shared effective-predicate owner to reads, keyed and
 set writes, relation targets/pivots, aggregates, joins and subqueries. Inserts
