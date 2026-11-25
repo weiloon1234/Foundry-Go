@@ -4,7 +4,7 @@ The HTTP kernel integrates standard `net/http` handlers with Foundry's
 [application lifecycle](foundation.md). This guide covers server ownership and
 request deadlines. [Typed endpoints](http-endpoints.md)
 compose generated input and response contracts on this same kernel. The
-[HTTP blueprint](../../blueprint/08-http-validation-and-responses.md) owns that
+HTTP blueprint owns that
 milestone scope.
 
 ## Application registration
@@ -126,7 +126,7 @@ boundaries follow the standard server's [shutdown contract](https://pkg.go.dev/n
 Focused race tests cover normal requests, graceful completion, forced connection
 closure with unfinished handlers, hijacked handler cancellation, binding failure,
 single-use startup, raw panic/abort/Goexit, and application dependency retention.
-The kernel passed full repository acceptance. The [HTTP blueprint](../../blueprint/08-http-validation-and-responses.md) records the complete milestone status.
+The kernel passed full repository acceptance. The HTTP blueprint records the complete milestone status.
 
 Milestone 24 delivered verified production admission: `MaxConnections` defaults
 to 4,096 accepted connections and reserves capacity before native Accept, including

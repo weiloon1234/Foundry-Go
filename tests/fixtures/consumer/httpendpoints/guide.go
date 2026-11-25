@@ -41,4 +41,6 @@ func GuideRouter(service UpdateService) (*foundryhttp.Router, error) {
 	return foundryhttp.NewRouter(endpoint.Handle(func(ctx context.Context, in foundryhttp.Input[httpkernel.UserPath, foundryhttp.NoQuery, httpdto.UpdateUser]) (httpdto.UserResponse, error) {
 		return service.UpdateValues(ctx, in.Path.User, in.Body)
 	}))
-} // doc-example:end compose-endpoint
+}
+
+// doc-example:end compose-endpoint

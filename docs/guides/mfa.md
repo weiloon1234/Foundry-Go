@@ -2,7 +2,7 @@
 
 Encrypted TOTP factors and hashed recovery codes integrate with model-first enrollment, management and transactional pending-session/token completion.
 
-Milestone 10 passed native acceptance. See the [master roadmap](../../blueprint/00-master-architecture-and-parity.md#milestone-10-acceptance) for verification evidence and later integration boundaries.
+Milestone 10 passed native acceptance. See the master roadmap for verification evidence and later integration boundaries.
 
 ## Model-first assembly
 

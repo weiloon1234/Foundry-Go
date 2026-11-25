@@ -441,7 +441,7 @@ longer route. Nginx idle timers measure gaps in progress, not total duration.
 Use the [upload deployment profile](deployment.md#large-upload-ingress) to keep
 those settings and the writable sandbox paths consistent.
 
-The [B26 acceptance scenarios](../evidence/b26-resource-provider-acceptance.md)
+The B26 acceptance scenarios
 exercise actual rendered nginx, silent publication, known-length and chunked
 input, idle and total deadlines, disconnects and quota exhaustion. HTTP pool
 checks do not certify attachment or local-storage admission. Those owners must

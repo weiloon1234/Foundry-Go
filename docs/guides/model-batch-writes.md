@@ -4,7 +4,7 @@ Use `orm.CreateEach`, `orm.UpdateEach`, `orm.DeleteEach`, `orm.RestoreEach` and 
 
 ## Create and update models
 
-<!-- orm-example: each-writes -->
+<!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#each-writes -->
 ```go
 func updateMembers(ctx context.Context, tx *database.Tx) ([]hooks.Member, error) {
 	f := hooks.Members
@@ -31,7 +31,7 @@ The update callback receives the stored model and the operation's actual transac
 
 ## Delete and restore
 
-<!-- orm-example: each-soft-writes -->
+<!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#each-soft-writes -->
 ```go
 func restoreMembers(ctx context.Context, tx *database.Tx) ([]hooks.Member, error) {
 	f := hooks.Members
@@ -56,7 +56,7 @@ Cancellation, panic and `runtime.Goexit` follow ordinary lifecycle failure handl
 
 ## Set-based writes
 
-<!-- orm-example: set-writes-after -->
+<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#set-writes-after -->
 ```go
 func setWrite(ctx context.Context, tx *database.Tx) error {
 	_, err := orm.UpdateAll(ctx, tx, orm.WithoutModelHooks(hooks.Members.Query()), orm.Set(hooks.Members.Name, "guest"))
@@ -70,7 +70,7 @@ func setWrite(ctx context.Context, tx *database.Tx) error {
 
 ## Atomic numeric adjustments
 
-<!-- orm-example: adjustments -->
+<!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#adjustments -->
 ```go
 func addCredit(ctx context.Context, tx *database.Tx) (int64, error) {
 	f := models.Orders

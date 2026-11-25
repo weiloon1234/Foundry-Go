@@ -371,7 +371,7 @@ Binding the primary field twice is a startup error, not another column declarati
 
 ## Old to new API
 
-The complete [retired spelling table](../../docs/guides/orm-migration.md#removed-api-spellings)
+The complete [retired spelling table](https://github.com/weiloon1234/Foundry-Go/blob/7b364318/docs/guides/orm-migration.md#removed-api-spellings)
 is documentation-only migration history. The guide's compiled after examples are
 the supported native API. Earlier slice mappings are superseded, including the
 intermediate loading, row-value and terminal spellings.
@@ -1920,7 +1920,7 @@ unchanged footprint ceilings remain registered. Retained live SQL and
 hydration oracles and shared model identities still need their coordinated retirement;
 Stage 9 and the barrier are therefore in progress.
 
-The [migration guide](../../docs/guides/orm-migration.md) has compiled examples and
+The [migration guide](https://github.com/weiloon1234/Foundry-Go/blob/7b364318/docs/guides/orm-migration.md) has compiled examples and
 [breaking-change notes](../../docs/evidence/goway-breaking-changes.md). Business
 helpers return typed assignments, including explicitly supplied empty values; root
 consumer assertions now call CurrentEmailAssignment and CreatorAssignment directly.

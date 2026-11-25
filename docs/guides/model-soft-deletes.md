@@ -8,7 +8,7 @@ The column must be non-primary. Migrations own its nullable SQL column. `softdel
 
 `orm.Delete` soft-delete configured models, returning the stored post-write model. `orm.Restore` clears the deletion time on one deleted key. `orm.RestoreEach` restores a bounded set and requires the soft token. Ordinary models retain physical deletion.
 
-<!-- orm-example: force-after -->
+<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#force-after -->
 ```go
 func forceDelete(ctx context.Context, tx *database.Tx, id int64) error {
 	_, err := orm.ForceDelete(ctx, tx, Users.Query().WithTrashed(), Users.Soft, Users.Key(), id)

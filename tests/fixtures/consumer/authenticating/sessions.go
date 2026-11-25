@@ -43,7 +43,9 @@ func ListedSessions(ctx context.Context, sessions *UserSessions, user models.Use
 }
 func RevokeListedSession(ctx context.Context, sessions *UserSessions, user models.User, id session.ID[models.User]) (bool, error) {
 	return sessions.RevokeID(ctx, orm.IdentityOf(models.Users.Table, models.Users.Key()).ReferenceOf(user), id)
-} // doc-example:end sessions-listed-sessions
+}
+
+// doc-example:end sessions-listed-sessions
 func SessionSubject(info UserSession) model.Reference[models.User, model.ID[models.User]] {
 	return info.Subject()
 }

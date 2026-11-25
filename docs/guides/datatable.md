@@ -522,6 +522,23 @@ with the same ID cannot substitute a different authorization callback. Registry
 construction rejects duplicate IDs. `Table.Description()` is trusted assembly
 metadata; use `Inspect(ctx, manager, authority)` when exposing it to clients.
 
+## Use an isolated test schema
+
+The manager sets its configured schema as the transaction's search path on each
+request. With `testkit/postgres.Isolate`, pass the test scope's schema in the
+manager configuration:
+
+[Compiled excerpt, imports and enclosing context](../../tests/fixtures/goway/migration/pilot_test.go):
+
+<!-- compiled-source: tests/fixtures/goway/migration/pilot_test.go#pilot-recipe-datatable-test -->
+```go
+func isolatedDatatableConfig(scope *postgres.Scope) datatable.Config {
+	config := datatable.DefaultConfig()
+	config.Schema = scope.Schema()
+	return config
+}
+```
+
 <a id="recipe-compile-table-sql"></a>
 ## Pin a table's SQL in a test
 

@@ -94,7 +94,7 @@ Footprint: keep every surviving ceiling unchanged. The budget baselines are `q_w
 
 | Surface | Closure rule |
 | --- | --- |
-| `docs/guides/orm-migration.md` | Complete old→native mapping, including aliases/constants and §4 removals; removed API text only inside labelled doc-only “before” blocks. Compile the native “after” examples. Never revive compiled migration-before examples. |
+| `https://github.com/weiloon1234/Foundry-Go/blob/7b364318/docs/guides/orm-migration.md` | Complete old→native mapping, including aliases/constants and §4 removals; removed API text only inside labelled doc-only “before” blocks. Compile the native “after” examples. Never revive compiled migration-before examples. |
 | `docs/guides/{query-build-resources,query-plans,parity-reconciliation}.md`; package READMEs | Update active operations, owners, limits and links. Rewrite snippets, not just imports. Move necessary retired syntax into before blocks; no active recommendation of query or compatibility helpers. |
 | `blueprint/README.md:19`, master and Go-way blueprint; root/scoped `AGENTS.md` | Remove current claims that two APIs coexist, generated persistence is supported, or query owns shared contracts. Historical release evidence remains labelled historical. Lead integrates shared blueprint/CHANGELOG notes; do not rewrite old measured acceptance claims. |
 | `internal/agent`, generator/scaffold templates, `tools/release`, synthetic probes | Search emitted source and expected completion/hover strings, not only parsed imports. Make native examples compile with current public signatures; historical benchmark checkout mode remains explicitly tied to its old commit. |

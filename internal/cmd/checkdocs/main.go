@@ -26,14 +26,15 @@ var (
 )
 
 func main() {
-	inputs := flag.String("go-inputs", "", "check guide coverage against fixture go list JSON")
-	flag.Parse()
-	if flag.NArg() != 0 {
-		fmt.Fprintln(os.Stderr, "checkdocs accepts flags only")
+	flags := flag.NewFlagSet("checkdocs", flag.ContinueOnError)
+	inputs := flags.String("go-inputs", "", "check guide coverage against fixture go list JSON")
+	if err := docsource.ParseFlags(flags, os.Args[1:]); err != nil {
+		fmt.Fprintln(os.Stderr, docsource.Diagnostics(err))
 		os.Exit(1)
 	}
+
 	if err := run(".", *inputs); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, docsource.Diagnostics(err))
 		os.Exit(1)
 	}
 	fmt.Println("Documentation links, current guide milestone claims, blueprint numbering, and fixture Go requirements are valid.")
@@ -52,7 +53,7 @@ func run(root, inputs string) error {
 		return err
 	}
 	defer file.Close()
-	return docsource.CheckGoInputs(root, documents, file)
+	return errors.Join(docsource.CheckBindings(documents), docsource.CheckGoInputs(root, documents, file))
 }
 
 func checkRepository(root string) error {
@@ -62,8 +63,9 @@ func checkRepository(root string) error {
 	documents, sourceErr := docsource.Load(root)
 	if sourceErr != nil {
 		failures = append(failures, sourceErr)
-	} else {
-		failures = append(failures, docsource.Check(documents), docsource.CheckTypeScriptInputs(root, documents))
+	}
+	{
+		failures = append(failures, docsource.CheckBindings(documents), docsource.Check(documents), docsource.CheckTypeScriptInputs(root, documents))
 		for _, document := range documents {
 			path := filepath.Join(root, filepath.FromSlash(document.Path))
 			_, err := docrefs.IndexAnchors(path, document.Original)
@@ -90,10 +92,24 @@ func checkRepository(root string) error {
 		if walkErr != nil {
 			return walkErr
 		}
-		if entry.IsDir() {
-			switch entry.Name() {
-			case ".git", ".cache", "node_modules", "vendor", ".deploy": // .deploy holds local deploy build copies
+		if strings.HasPrefix(entry.Name(), ".env") {
+			if entry.IsDir() {
 				return filepath.SkipDir
+			}
+			return nil
+		}
+		if entry.IsDir() {
+			relative, err := filepath.Rel(root, path)
+			if err != nil {
+				return err
+			}
+			relative = filepath.ToSlash(relative)
+			owned := relative == "docs/guides" || strings.HasPrefix(relative, "docs/guides/") || relative == ".claude/skills" || strings.HasPrefix(relative, ".claude/skills/")
+			if !owned {
+				switch entry.Name() {
+				case ".git", ".cache", "node_modules", "vendor", ".deploy": // .deploy holds local deploy build copies
+					return filepath.SkipDir
+				}
 			}
 			return nil
 		}
@@ -104,7 +120,7 @@ func checkRepository(root string) error {
 			}
 			relative = filepath.ToSlash(relative)
 			active := currentGuide(root, path) || entry.Name() == "AGENTS.md" || entry.Name() == "README.md" && !strings.HasPrefix(relative, "blueprint/") && !strings.HasPrefix(relative, "docs/evidence/") && !strings.Contains(relative, "/testdata/")
-			skill := strings.HasPrefix(relative, ".claude/skills/") && !datedGuide.MatchString(relative)
+			skill := strings.HasPrefix(relative, ".claude/skills/")
 			if active || skill {
 				data, err := os.ReadFile(path)
 				if err != nil {
@@ -129,7 +145,7 @@ func checkRepository(root string) error {
 			if err != nil {
 				failures = append(failures, err)
 			} else if fixtureVersion != version {
-				failures = append(failures, fmt.Errorf("%s: Go requirement %s differs from root %s", path, fixtureVersion, version))
+				failures = append(failures, fmt.Errorf("%s:%d: Go requirement %s differs from root %s; align the fixture go directive with the root go.mod.", path, goRequirementLine(path), fixtureVersion, version))
 			}
 		}
 		return nil
@@ -153,16 +169,16 @@ func checkBlueprints(root string) error {
 		}
 		match := blueprintName.FindStringSubmatch(entry.Name())
 		if match == nil {
-			return fmt.Errorf("blueprint/%s: expected NN-descriptive-name.md", entry.Name())
+			return fmt.Errorf("blueprint/%s:0: invalid blueprint filename; rename it to NN-descriptive-name.md", entry.Name())
 		}
 		number, _ := strconv.Atoi(match[1])
 		if number != next {
-			return fmt.Errorf("blueprint/%s: expected milestone %02d (missing or duplicate number)", entry.Name(), next)
+			return fmt.Errorf("blueprint/%s:0: expected milestone %02d (missing or duplicate number); restore sequential blueprint numbering.", entry.Name(), next)
 		}
 		next++
 	}
 	if next == 0 {
-		return errors.New("blueprint: no numbered blueprints found")
+		return errors.New("blueprint:0: no numbered blueprints found; restore the numbered blueprint files.")
 	}
 	return nil
 }
@@ -178,7 +194,7 @@ func goRequirement(path string) (string, error) {
 			return fields[1], nil
 		}
 	}
-	return "", fmt.Errorf("%s: missing Go requirement", path)
+	return "", fmt.Errorf("%s:0: missing Go requirement; add the go directive matching the root go.mod.", path)
 }
 
 func checkDocument(root, path string, current bool, completed map[string]bool, agentLines map[int]bool) error {
@@ -226,7 +242,7 @@ func checkDocument(root, path string, current bool, completed map[string]bool, a
 			fence = marker
 			continue
 		}
-		masked := maskInlineCode(line)
+		masked := docsource.MaskInlineCode(line)
 		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
 			flushParagraph()
 		} else if current {
@@ -239,12 +255,12 @@ func checkDocument(root, path string, current bool, completed map[string]bool, a
 			target := strings.Trim(strings.TrimSpace(destination), "<>")
 			link, err := url.Parse(target)
 			if err != nil {
-				failures = append(failures, fmt.Errorf("%s:%d: invalid link %q: %w", path, lineNumber, target, err))
+				failures = append(failures, fmt.Errorf("%s:%d: invalid link %q: %v; use a valid local path or URL.", path, lineNumber, target, err))
 				continue
 			}
 			explicit := link.Fragment == "agent-entry" || strings.HasPrefix(link.Fragment, "recipe-")
 			if agentLines[lineNumber] && (!explicit || link.IsAbs() || link.Host != "") {
-				failures = append(failures, fmt.Errorf("%s:%d: Agent entry link %q must target a local guide's explicit agent-entry or recipe-* anchor", path, lineNumber, target))
+				failures = append(failures, fmt.Errorf("%s:%d: Agent entry link %q must target a local guide's explicit agent-entry or recipe-* anchor; select an existing task anchor.", path, lineNumber, target))
 				continue
 			}
 			if link.IsAbs() || link.Host != "" || link.Path == "" && !explicit {
@@ -256,26 +272,30 @@ func checkDocument(root, path string, current bool, completed map[string]bool, a
 			}
 			relative, err := filepath.Rel(root, local)
 			if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-				failures = append(failures, fmt.Errorf("%s:%d: local link %q: target is outside repository root", path, lineNumber, target))
+				failures = append(failures, fmt.Errorf("%s:%d: local link %q: target is outside repository root; link to a file inside the repository.", path, lineNumber, target))
+				continue
+			}
+			if historicalTeachingTarget(root, path, relative) {
+				failures = append(failures, fmt.Errorf("%s:%d: teaching link %q targets historical material; link to the current task guide or retain an unlinked historical citation.", path, lineNumber, target))
 				continue
 			}
 			if _, err := os.Stat(local); err != nil {
-				failures = append(failures, fmt.Errorf("%s:%d: local link %q: %w", path, lineNumber, target, err))
+				failures = append(failures, fmt.Errorf("%s:%d: local link %q: %v; correct the link target or restore the missing file.", path, lineNumber, target, err))
 				continue
 			}
 			resolvedRoot, rootErr := filepath.EvalSymlinks(root)
 			resolvedLocal, localErr := filepath.EvalSymlinks(local)
 			if rootErr != nil || localErr != nil {
-				failures = append(failures, fmt.Errorf("%s:%d: local link %q: %w", path, lineNumber, target, errors.Join(rootErr, localErr)))
+				failures = append(failures, fmt.Errorf("%s:%d: local link %q: %v; correct the link target or restore the missing file.", path, lineNumber, target, errors.Join(rootErr, localErr)))
 				continue
 			}
 			relative, err = filepath.Rel(resolvedRoot, resolvedLocal)
 			if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-				failures = append(failures, fmt.Errorf("%s:%d: local link %q: target is outside repository root", path, lineNumber, target))
+				failures = append(failures, fmt.Errorf("%s:%d: local link %q: target is outside repository root; link to a file inside the repository.", path, lineNumber, target))
 				continue
 			}
 			if agentLines[lineNumber] && (filepath.Dir(local) != filepath.Join(root, "docs", "guides") || filepath.Ext(local) != ".md") {
-				failures = append(failures, fmt.Errorf("%s:%d: Agent entry link %q must target a local guide", path, lineNumber, target))
+				failures = append(failures, fmt.Errorf("%s:%d: Agent entry link %q must target a local guide; link to an existing task in docs/guides.", path, lineNumber, target))
 				continue
 			}
 			if explicit {
@@ -287,7 +307,7 @@ func checkDocument(root, path string, current bool, completed map[string]bool, a
 	}
 	flushParagraph()
 	if err := scanner.Err(); err != nil {
-		failures = append(failures, fmt.Errorf("%s: %w", path, err))
+		failures = append(failures, fmt.Errorf("%s:%d: cannot read document: %v; shorten the line or restore read access.", path, lineNumber, err))
 	}
 	return errors.Join(failures...)
 }
@@ -295,7 +315,7 @@ func checkDocument(root, path string, current bool, completed map[string]bool, a
 func checkExplicitFragment(source string, line int, target, fragment string) error {
 	data, err := os.ReadFile(target)
 	if err != nil {
-		return fmt.Errorf("%s:%d: fragment target %s: %w", source, line, target, err)
+		return fmt.Errorf("%s:%d: fragment target %s: %v; restore the linked file or correct the link.", source, line, target, err)
 	}
 	anchors, err := docrefs.IndexAnchors(target, data)
 	if err != nil {
@@ -307,46 +327,27 @@ func checkExplicitFragment(source string, line int, target, fragment string) err
 	return nil
 }
 
-// Inline Go generics (for example `New[T](arg)`) resemble Markdown links.
-// Mask matched code spans, including spans delimited by multiple backticks,
-// without hiding real links elsewhere on the same line. Unmatched delimiters
-// remain ordinary text. This checker is deliberately not a full Markdown parser.
-func maskInlineCode(line string) string {
-	masked := []byte(line)
-	for start := 0; start < len(line); {
-		if line[start] != '`' {
-			start++
-			continue
-		}
-		end := start
-		for end < len(line) && line[end] == '`' {
-			end++
-		}
-		width := end - start
-		closed := -1
-		for cursor := end; cursor < len(line); {
-			if line[cursor] != '`' {
-				cursor++
-				continue
-			}
-			next := cursor
-			for next < len(line) && line[next] == '`' {
-				next++
-			}
-			if next-cursor == width {
-				closed = next
-				break
-			}
-			cursor = next
-		}
-		if closed < 0 {
-			start = end
-			continue
-		}
-		for i := start; i < closed; i++ {
-			masked[i] = ' '
-		}
-		start = closed
+func historicalTeachingTarget(root, source, target string) bool {
+	relative, err := filepath.Rel(root, source)
+	if err != nil {
+		return false
 	}
-	return string(masked)
+	relative = filepath.ToSlash(relative)
+	target = filepath.ToSlash(target)
+	teaching := strings.HasPrefix(relative, "docs/guides/") || strings.HasPrefix(relative, ".claude/skills/")
+	return teaching && (strings.HasPrefix(target, "docs/evidence/") || strings.HasPrefix(target, "blueprint/") || target == "CHANGELOG.md")
+}
+
+func goRequirementLine(path string) int {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0
+	}
+	for i, line := range strings.Split(string(data), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) >= 2 && fields[0] == "go" {
+			return i + 1
+		}
+	}
+	return 0
 }

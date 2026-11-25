@@ -23,7 +23,7 @@ func writeOptions() []orm.Option {
 	return []orm.Option{orm.WithHooks(memberHooks)}
 }
 
-// guide:register-observer
+// doc-example:begin register-observer
 func registerMemberObserver(r *foundation.Registrar, pool foundation.Key[*database.DB]) error {
 	return orm.RegisterObserver(r, pool, orm.NewObserver[hooks.Member]("members.defaults"),
 		func(foundation.Resolver) (func() orm.Hooks[hooks.Member], error) {
@@ -31,7 +31,7 @@ func registerMemberObserver(r *foundation.Registrar, pool foundation.Key[*databa
 		})
 }
 
-// guide:end
+// doc-example:end register-observer
 
 func readOptions() []orm.Option {
 	return []orm.Option{orm.WithRetrievalHooks(retrieval)}
@@ -50,15 +50,15 @@ func scopeOptions() []orm.Option {
 	})}
 }
 
-// guide:stored-comparison
+// doc-example:begin stored-comparison
 func compareStored(before, after hooks.Member) (orm.Changes[hooks.Member], error) {
 	return orm.Compare(hooks.Members.Table, value.Set(before), value.Set(after),
 		orm.Set(hooks.Members.Name, after.Name))
 }
 
-// guide:end
+// doc-example:end stored-comparison
 
-// guide:each-writes
+// doc-example:begin each-writes
 func updateMembers(ctx context.Context, tx *database.Tx) ([]hooks.Member, error) {
 	f := hooks.Members
 	return orm.UpdateEach(ctx, tx, f.Query().Where(orm.Eq(f.Name, "guest")), 100,
@@ -75,9 +75,9 @@ func createMembers(ctx context.Context, tx *database.Tx) ([]hooks.Member, error)
 	})
 }
 
-// guide:end
+// doc-example:end each-writes
 
-// guide:each-soft-writes
+// doc-example:begin each-soft-writes
 func restoreMembers(ctx context.Context, tx *database.Tx) ([]hooks.Member, error) {
 	f := hooks.Members
 	return orm.RestoreEach(ctx, tx, f.Query().Where(orm.Eq(f.Name, "guest")), f.Soft, 100)
@@ -88,17 +88,17 @@ func removeMembers(ctx context.Context, tx *database.Tx) ([]hooks.Member, error)
 	return orm.ForceDeleteEach(ctx, tx, f.Query().OnlyTrashed(), f.Soft, 100)
 }
 
-// guide:end
+// doc-example:end each-soft-writes
 
-// guide:adjustments
+// doc-example:begin adjustments
 func addCredit(ctx context.Context, tx *database.Tx) (int64, error) {
 	f := models.Orders
 	return orm.UpdateAll(ctx, tx, f.Query().Where(orm.Lt(f.TotalCents, 1000)), orm.Increment(f.TotalCents, 100, orm.AtMost[int64](1000)))
 }
 
-// guide:end
+// doc-example:end adjustments
 
-// guide:lookup-branches
+// doc-example:begin lookup-branches
 func createOrFindUser(ctx context.Context, tx *database.Tx) (models.User, error) {
 	f := models.Users
 	return orm.CreateOrFirst(ctx, tx, f.Query().Where(orm.Eq(f.Email, "ada@example.test")), orm.Set(f.Age, 30), orm.Set(f.Status, models.StatusActive), orm.Set(f.Level, models.LevelBasic))
@@ -113,7 +113,7 @@ func updateOrCreateUser(ctx context.Context, tx *database.Tx) (models.User, erro
 		})
 }
 
-// guide:end
+// doc-example:end lookup-branches
 
 type ArchivedMember struct {
 	ID                   int64
@@ -151,7 +151,7 @@ func copyMembers(ctx context.Context, tx *database.Tx) (int64, error) {
 		Values(orm.Set(destination.Name, "copy")).Exec(ctx, tx)
 }
 
-// guide:source-update
+// doc-example:begin source-update
 func updateMemberBodies(ctx context.Context, tx *database.Tx) (int64, error) {
 	f := hooks.Members
 	destination := f.Query()
@@ -161,9 +161,9 @@ func updateMemberBodies(ctx context.Context, tx *database.Tx) (int64, error) {
 		Values(orm.Set(f.Name, "updated")).Exec(ctx, tx)
 }
 
-// guide:end
+// doc-example:end source-update
 
-// guide:source-delete
+// doc-example:begin source-delete
 func deleteMatchingMembers(ctx context.Context, tx *database.Tx) (int64, error) {
 	f := hooks.Members
 	destination := f.Query().OnlyTrashed()
@@ -171,9 +171,9 @@ func deleteMatchingMembers(ctx context.Context, tx *database.Tx) (int64, error) 
 		Match(rows.MatchSource(f.Key(), expr.Value(f.Key()))).Exec(ctx, tx)
 }
 
-// guide:end
+// doc-example:end source-delete
 
-// guide:pruning
+// doc-example:begin pruning
 func pruneMembers(ctx context.Context, db database.Transactor, cutoff time.Time) (prune.Result, error) {
 	f := hooks.Members
 	registry, err := prune.New(prune.ORMSoftModel("app.old_members",
@@ -184,9 +184,9 @@ func pruneMembers(ctx context.Context, db database.Transactor, cutoff time.Time)
 	return registry.Run(ctx, db, prune.DefaultOptions())
 }
 
-// guide:end
+// doc-example:end pruning
 
-// guide:explain
+// doc-example:begin explain
 func inspectOrders(ctx context.Context, db database.Executor) (orm.Plan, error) {
 	return orm.Explain(ctx, db, models.Orders.Query().Where(orm.Gt(models.Orders.TotalCents, 100)))
 }
@@ -195,20 +195,19 @@ func analyzeOrders(ctx context.Context, tx *database.Tx) (orm.Plan, error) {
 	return orm.ExplainAnalyzeLocked(ctx, tx, orm.Lock(models.Orders.Query()))
 }
 
-// guide:end
+// doc-example:end explain
 
-// guide:audit-registration
 // doc-example:begin audit-registration
 func registerAudit(r *foundation.Registrar, pool foundation.Key[*database.DB], history foundation.Key[*audit.Recorder]) error {
 	f := hooks.Members
 	policy := orm.AuditPolicyOf(f.Table, orm.AuditField(f.Note, record.Exclude))
 	return audit.Register(r, pool, history,
 		audit.Config{Area: "accounts", RetentionDays: 90}, orm.Auditing(f.Table, policy))
-} // doc-example:end audit-registration
+}
 
-// guide:end
+// doc-example:end audit-registration
 
-// guide:audit-timeline
+// doc-example:begin audit-timeline
 func memberHistory(ctx context.Context, db database.Executor, recorder *audit.Recorder, member hooks.Member) error {
 	identity := orm.IdentityOf(hooks.Members.Table, hooks.Members.Key())
 	subject := identity.ReferenceOf(member)
@@ -223,25 +222,25 @@ func memberHistory(ctx context.Context, db database.Executor, recorder *audit.Re
 	return err
 }
 
-// guide:end
+// doc-example:end audit-timeline
 
-// guide:audit-field
+// doc-example:begin audit-field
 func historicalName(history record.Model[hooks.Member, int64]) (value.Optional[record.FieldChange[string]], error) {
 	return orm.AuditRead(history, hooks.Members.Name)
 }
 
-// guide:end
+// doc-example:end audit-field
 
-// guide:audit-find
+// doc-example:begin audit-find
 func findHistory(ctx context.Context, db database.Executor, recorder *audit.Recorder, id audit.ModelID[hooks.Member]) error {
 	identity := orm.IdentityOf(hooks.Members.Table, hooks.Members.Key())
 	_, err := audit.FindModel(ctx, db, recorder, identity.ReferenceOf(hooks.Member{}), id)
 	return err
 }
 
-// guide:end
+// doc-example:end audit-find
 
-// guide:audit-action
+// doc-example:begin audit-action
 type Approval struct {
 	Reason string `json:"reason"`
 }
@@ -255,18 +254,17 @@ func approve(ctx context.Context, tx *database.Tx, recorder *audit.Recorder, mem
 	return err
 }
 
-// guide:end
+// doc-example:end audit-action
 
-// guide:insert-member
 // doc-example:begin insert-member
 func insertMember(ctx context.Context, tx *database.Tx, id int64) (hooks.Member, error) {
 	f := hooks.Members
 	return orm.Insert(ctx, tx, f.Table, orm.Set(f.Key(), id), orm.Set(f.Name, "Ada"), orm.Set(f.Body, []byte{}))
-} // doc-example:end insert-member
+}
 
-// guide:end
+// doc-example:end insert-member
 
-// guide:upsert-user
+// doc-example:begin upsert-user
 func upsertUser(ctx context.Context, tx *database.Tx) (value.Optional[models.User], error) {
 	f := models.Users
 	policy := orm.OnConflict(orm.ConflictKey(f.Email)).DoUpdate(orm.ConflictIncoming(f.Age))
@@ -275,18 +273,18 @@ func upsertUser(ctx context.Context, tx *database.Tx) (value.Optional[models.Use
 		orm.Set(f.Status, models.StatusActive), orm.Set(f.Level, models.LevelBasic))
 }
 
-// guide:end
+// doc-example:end upsert-user
 
-// guide:first-or-create-user
+// doc-example:begin first-or-create-user
 func firstOrCreateUser(ctx context.Context, tx *database.Tx) (models.User, error) {
 	f := models.Users
 	return orm.FirstOrCreate(ctx, tx, f.Query().Where(orm.Eq(f.Email, "ada@example.test")),
 		orm.Set(f.Age, 30), orm.Set(f.Status, models.StatusActive), orm.Set(f.Level, models.LevelBasic))
 }
 
-// guide:end
+// doc-example:end first-or-create-user
 
-// guide:audit-page
+// doc-example:begin audit-page
 func memberHistoryPage(ctx context.Context, db database.Executor, recorder *audit.Recorder, member hooks.Member) error {
 	identity := orm.IdentityOf(hooks.Members.Table, hooks.Members.Key())
 	_, err := audit.ModelHistory(ctx, db, recorder, identity.ReferenceOf(member),
@@ -294,4 +292,4 @@ func memberHistoryPage(ctx context.Context, db database.Executor, recorder *audi
 	return err
 }
 
-// guide:end
+// doc-example:end audit-page

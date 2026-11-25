@@ -14,7 +14,7 @@ Workers support shared observations, maintenance admission and optional
 trace snapshots. Every envelope uses format 3 (`jobs.CurrentEnvelopeVersion`).
 Follow the [envelope activation requirements](job-trace-rollout.md), including
 stopped-writer conversion of retained older formats. Trace propagation is optional.
-The [master roadmap](../../blueprint/00-master-architecture-and-parity.md) records
+The master roadmap records
 acceptance and verification evidence. The [independent consumer](../../tests/fixtures/consumer/background/)
 contains compiling public API examples; acceptance results are recorded separately.
 

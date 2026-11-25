@@ -6,7 +6,7 @@ registrations. Start with `application.New(settings)` and the existing
 [configured consumer](consumer-startup-acceptance.md), then follow the
 [complete typed API workflow](typed-api-workflow.md) for authenticated database work.
 
-Use the [master status](../../blueprint/00-master-architecture-and-parity.md) and
+Use the master status and
 current guides to select delivered APIs. The
 [September 27 readiness review](final-readiness-20260927.md) records verification,
 races and independent package consumption for its reviewed revision. Distribution
@@ -125,7 +125,7 @@ The [team readiness audit](team-readiness-20260925.md) records current acceptanc
 PostgreSQL is the supported database. Redis connections target explicit standalone
 servers; Cluster and Sentinel routing are not implemented. MySQL/SQLite, Dart client generation,
 durable WebSocket recovery and Pusher/Echo compatibility remain
-[deferred extensions](../../blueprint/25-deferred-extensions.md).
+deferred extensions.
 Type checking protects declared Go contracts; validation, authorization and
 database constraints still enforce runtime input and business rules.
 The local-storage and file-cache adapters currently require macOS or Linux.

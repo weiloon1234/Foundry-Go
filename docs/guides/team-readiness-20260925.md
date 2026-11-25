@@ -4,14 +4,14 @@ Scope: adopting Foundry-Go as a dependency while a team builds its own boilerpla
 **Accepted for team boilerplate development on the supported stack.** The review,
 corrections and final verification are complete. The team must select a retrievable
 framework version before remote installation. The [adoption guide](team-adoption.md)
-supplies the development path; the [evidence record](../evidence/team-readiness-20260925.json)
+supplies the development path; the evidence record
 retains commands, hashes, corrections and limits.
 
 ## Review method and coverage
 
 The initial source comparison matched all 3,661 runtime/generator/test/client source hashes and 91 build,
 dependency, generation and workflow input hashes retained by the
-[September 24 acceptance](../evidence/security-hardening-20260924.json).
+September 24 acceptance.
 The [September 23 module review](module-review-20260923.md) covers 65 module families;
 the subsequent [security continuation](security-hardening-20260924.md) covers its
 additions. This audit reuses those identified results for unchanged internals and

@@ -14,7 +14,8 @@ func NumericLevelRoutes(group http.Scope, config datatable.RoutesConfig[Operator
 	return datatable.Routes(group, NumericLevels, config,
 		datatable.ReadAccess(read...),
 		datatable.ExportAccess(export...),
-	) // doc-example:end datatable-7
+	)
+	// doc-example:end datatable-7
 }
 
 // NumericLevelTokenTickets retains the same operator type as NumericLevelRoutes.

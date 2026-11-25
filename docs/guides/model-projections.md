@@ -196,4 +196,21 @@ Use `rows.BoolOf(b, &r.Enabled)` for built-in or named Boolean fields. Use
 `rows.EnumOf(b, &r.Status)` when Status is `countries.Status`: it already exports
 `EnumDescriptor()` and `StatusCodec()`. The enum constructor retains enum validation
 and aggregate restrictions; a custom string field is not equivalent metadata.
-See the compiled [row declaration](orm-migration.md#pilot-expressions-and-row-declarations).
+[Compiled excerpt, imports and enclosing context](../../tests/fixtures/goway/migration/pilot2_test.go):
+
+<!-- compiled-source: tests/fixtures/goway/migration/pilot2_test.go#pilot2-boolean-enum -->
+```go
+type CountryFlag struct {
+	Status  countries.Status
+	Enabled bool
+}
+type CountryFlagColumns struct {
+	rows.Row[CountryFlag]
+	Status  rows.Field[CountryFlag, countries.Status]
+	Enabled rows.Field[CountryFlag, bool]
+}
+
+var CountryFlags = rows.Define(func(b rows.Builder[CountryFlag], r *CountryFlag) CountryFlagColumns {
+	return CountryFlagColumns{b.Row(), rows.EnumOf(b, &r.Status), rows.BoolOf(b, &r.Enabled)}
+})
+```

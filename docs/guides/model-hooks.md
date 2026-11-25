@@ -36,7 +36,7 @@ The [member declaration](../../tests/fixtures/goway/models/hooks/models.go) show
 
 Register observers in a provider's registration callback for the same pool key used by the database module:
 
-<!-- orm-example: register-observer -->
+<!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#register-observer -->
 ```go
 func registerMemberObserver(r *foundation.Registrar, pool foundation.Key[*database.DB]) error {
 	return orm.RegisterObserver(r, pool, orm.NewObserver[hooks.Member]("members.defaults"),
@@ -68,7 +68,7 @@ Create runs `Saving`, `Creating`, conventions, mutators/encryption, SQL, `Create
 
 `orm.WriteGet(write, setter)` reads an optional typed input. The setter is a typed callback, such as `func(v string) orm.Assignment[hooks.Member] { return orm.Set(hooks.Members.Name, v) }`. `WriteNullableGet` preserves omitted, NULL and value separately. `WriteIsSet` tests assignment presence. `WriteSet` replaces pending assignments and `WriteUnset` restores omission:
 
-<!-- orm-example: unset-after -->
+<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#unset-after -->
 ```go
 func unset(draft *orm.Write[hooks.Member]) error {
 	return orm.WriteUnset(draft, func() func(arg0 coremodels.LabelInput) orm.Assignment[hooks.Member] {

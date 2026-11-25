@@ -9,8 +9,9 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// Entry keeps an API token and optional connection settings encrypted at rest.
 // doc-example:begin encryption-entry
+
+// Entry keeps an API token and optional connection settings encrypted at rest.
 //
 //foundry:model table=vault_entries var=Entries key=ID identity=false
 type Entry struct {
@@ -18,7 +19,9 @@ type Entry struct {
 	Label    string
 	Token    encrypted.Text
 	Settings value.Nullable[encrypted.JSON[Settings]]
-} // doc-example:end encryption-entry
+}
+
+// doc-example:end encryption-entry
 
 // Settings is ordinary typed JSON before encryption.
 type Settings struct {

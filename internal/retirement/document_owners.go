@@ -26,6 +26,7 @@ type documentRules struct {
 		Methods     []string `json:"methods"`
 		Replacement string   `json:"replacement"`
 	} `json:"chains"`
+	replacements map[string]string
 	denied       map[string]map[string]bool
 	declarations map[string][]string
 }
@@ -38,6 +39,16 @@ func loadDocumentRules(declarations map[string][]string) (documentRules, error) 
 	}
 	if err := json.Unmarshal(data, &rules); err != nil {
 		return rules, err
+	}
+	entries, err := retiredDeclarations()
+	if err != nil {
+		return rules, err
+	}
+	rules.replacements = make(map[string]string)
+	for owner, members := range entries {
+		for _, member := range members {
+			rules.replacements[retirementName(owner+"."+member.Name)] = member.Replacement
+		}
 	}
 	rules.declarations = declarations
 	rules.denied = make(map[string]map[string]bool)
@@ -92,7 +103,7 @@ func (r documentRules) checkCode(name, code string, line int, application bool) 
 	})
 	aliases := map[string]string{"foundryhttp": "http"}
 	importedRetirements := make(map[string]bool)
-	dotRetirements := make(map[string]bool)
+	dotRetirements := make(map[string]string)
 	for _, spec := range file.Imports {
 		imported, err := strconv.Unquote(spec.Path.Value)
 		if err != nil {
@@ -113,7 +124,7 @@ func (r documentRules) checkCode(name, code string, line int, application bool) 
 			if application {
 				for _, member := range r.declarations[owner] {
 					if alias == "." {
-						dotRetirements[member] = true
+						dotRetirements[member] = path.Base(owner) + "." + member
 					} else if !r.owns(owner, member) {
 						importedRetirements[aliases[alias]+"."+member] = true
 					}
@@ -131,8 +142,8 @@ func (r documentRules) checkCode(name, code string, line int, application bool) 
 	// The parser's unresolved uses exclude local bindings, declarations,
 	// selector names and composite literal field names.
 	for _, id := range file.Unresolved {
-		if dotRetirements[id.Name] {
-			report(id.Pos(), "retired API "+id.Name+" from framework dot import")
+		if spelling := dotRetirements[id.Name]; spelling != "" {
+			report(id.Pos(), r.retirementMessage(spelling))
 		}
 	}
 	ast.Inspect(file, func(node ast.Node) bool {
@@ -143,7 +154,7 @@ func (r documentRules) checkCode(name, code string, line int, application bool) 
 		if len(importedRetirements) != 0 {
 			bindings := r.bindingsAt(file, selected.Pos(), aliases)
 			if spelling := qualifiedName(selected, bindings, aliases); importedRetirements[spelling] {
-				report(selected.Sel.Pos(), "retired API "+spelling)
+				report(selected.Sel.Pos(), r.retirementMessage(spelling))
 			}
 		}
 		denied := r.denied[selected.Sel.Name]
@@ -176,9 +187,9 @@ func (r documentRules) checkCode(name, code string, line int, application bool) 
 		bindings := r.bindingsAt(file, selected.Pos(), aliases)
 		owner := r.owner(receiver, bindings, aliases)
 		if denied[owner] || chainOwner != "" && owner == chainOwner {
-			message := "retired API " + owner + "." + selected.Sel.Name
+			message := r.retirementMessage(owner + "." + selected.Sel.Name)
 			if replacement != "" {
-				message += "; " + replacement
+				message = owner + "." + selected.Sel.Name + " is retired; " + replacement
 			}
 			report(selected.Sel.Pos(), message)
 		} else if owner == "" && r.matchesCallArguments(selected.Sel.Name, calls[selected]) {
@@ -364,4 +375,31 @@ func (r documentRules) bindingsAt(file *ast.File, pos token.Pos, aliases map[str
 		return true
 	})
 	return bindings
+}
+
+func (r documentRules) retirementMessage(name string) string {
+	name = retirementName(name)
+	if !strings.Contains(name, ".") {
+		qualified := ""
+		for spelling := range r.replacements {
+			if strings.HasSuffix(spelling, "."+name) {
+				if qualified != "" {
+					return name + " is retired; qualify the owner to identify its replacement."
+				}
+				qualified = spelling
+			}
+		}
+		if qualified != "" {
+			name = qualified
+		}
+	}
+	if replacement := r.replacements[name]; replacement != "" {
+		return name + " is retired; use " + replacement + "."
+	}
+	return name + " is retired; no replacement is recorded; remove this use and consult the current task guide."
+}
+
+// Canonicalize the resolved framework package path without changing ownership.
+func retirementName(name string) string {
+	return path.Base(strings.TrimPrefix(name, "framework:"))
 }

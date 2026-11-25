@@ -25,7 +25,9 @@ var UserSummaries = rows.Define(func(b rows.Builder[UserSummary], r *UserSummary
 		Nickname: rows.NullableTextOf(b, &r.Nickname),
 		Status:   rows.EnumOf(b, &r.Status),
 	}
-}) // doc-example:end user-summary
+})
+
+// doc-example:end user-summary
 
 type BuyerTotalsColumns struct {
 	rows.Row[BuyerTotals]

@@ -39,7 +39,9 @@ splitting identifiers into temporary slices. Codec scanners retain only their
 decoder and concrete destination while still rejecting incomplete codecs and
 publishing values only after successful decode. At that revision, public/generated signatures,
 query scopes, SQL text and bindings are preserved; the optimization required no consumer code changes or regeneration.
-The later ORM migration is covered separately by the [migration guide](orm-migration.md).
+For current queries, use the [model query guide](model-queries.md). The
+[retired-names ledger](../../internal/retirement/denied.json) gives the replacement
+for documented retired names.
 
 ## Measured results — 2026-10-11
 
@@ -48,7 +50,7 @@ on an Apple M4 Max with 64 GiB RAM and local PostgreSQL 18.6. Runtime GC and
 CPU settings were Go's defaults (16 logical CPUs). Compilation finished before
 the timing comparison; both paths include the same adapter's schema checkout
 checks. Each entry below is the median of five one-second samples.
-The [acceptance evidence](../evidence/orm-performance-20261011.json) retains every
+The acceptance evidence retains every
 sample, range, source fingerprint and check result.
 
 | Rows per read | Direct SQL after optimization | Typed ORM before | Typed ORM after | Added ORM cost after |

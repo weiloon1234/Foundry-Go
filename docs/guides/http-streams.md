@@ -157,5 +157,5 @@ Focused canonical acceptance passed: HTTP and consumer races, compiler rejection
 cases, actual gopls, fuzzing, bounded-copy benchmarks, vet and documentation checks.
 Combined full regression including all three generation-freshness targets also
 passed. [Static/SPA integration](http-assets.md) and [automatic ETags](http-etags.md)
-also passed full regression. The [HTTP blueprint](../../blueprint/08-http-validation-and-responses.md)
+also passed full regression. The HTTP blueprint
 records compression integration and final milestone acceptance.

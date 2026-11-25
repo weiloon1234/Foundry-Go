@@ -81,7 +81,7 @@ func TestRecipeFragmentFromOutsideGuides(t *testing.T) {
 func TestDisplacedRecipeAnchor(t *testing.T) {
 	root := testRepository(t)
 	writeTestFile(t, root, "docs/guides/example.md", "<a id=\"agent-entry\"></a>\n## Agent entry\n- Read: [Read](#recipe-read)\n\n<a id=\"recipe-read\"></a>\n<!-- displaced -->\n## Read\n```go\nnotCompiled()\n```\n")
-	if err := checkRepository(root); err == nil || !strings.Contains(err.Error(), "must be followed by one ATX heading") {
+	if err := checkRepository(root); err == nil || !strings.Contains(err.Error(), "must be followed by a # heading") {
 		t.Fatalf("displaced recipe escaped coverage: %v", err)
 	}
 }
@@ -95,7 +95,7 @@ func TestReferenceStyleNavigation(t *testing.T) {
 		{"shortcut", "[Read]\n\n[read]: <other.md#recipe-read>\n", ""},
 		{"same page", "[Read][recipe]\n\n[recipe]: #recipe-read\n<a id=\"recipe-read\"></a>\n## Read\n", ""},
 		{"unused definition", "[recipe]: other.md#recipe-missing\n", ""},
-		{"fenced use", "```md\n[Read][recipe]\n```\n[recipe]: other.md#recipe-missing\n", ""},
+		{"fenced use", "```markdown\n[Read][recipe]\n```\n[recipe]: other.md#recipe-missing\n", ""},
 		{"inline code", "`[Read][recipe]`\n[recipe]: other.md#recipe-missing\n", ""},
 	} {
 		t.Run(test.name, func(t *testing.T) {

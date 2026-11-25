@@ -33,7 +33,8 @@ func TestPostgresDistinctModelsProjectionsAndValues(t *testing.T) {
 		fields := scope
 		base := rows.SelectRecord(joined, scope).OrderBy(expr.Asc(expr.At(fields, models.Users.Email)))
 		unique := rows.DistinctRecord(base)
-		items, err := rows.ReadRecord(unique).All(t.Context(), tx) // doc-example:end model-distinct
+		items, err := rows.ReadRecord(unique).All(t.Context(), tx)
+		// doc-example:end model-distinct
 		if err != nil {
 			return err
 		}

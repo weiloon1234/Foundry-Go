@@ -1,16 +1,20 @@
 package docsource
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
+// TypeScriptInputs names the main strict fixture’s compiler input manifest.
 const TypeScriptInputs = "tests/fixtures/consumer/clientcontracts/typescript-inputs.json"
 
 // CheckTypeScriptInputs uses the same file list the fresh-client strict compiler
@@ -38,15 +42,35 @@ func CheckTypeScriptInputs(root string, documents []Document) error {
 		}
 		var names []string
 		if err := json.Unmarshal(data, &names); err != nil {
-			return err
+			line := 0
+			var syntax *json.SyntaxError
+			var valueType *json.UnmarshalTypeError
+			var offset int64
+			switch {
+			case errors.As(err, &syntax):
+				offset = syntax.Offset
+			case errors.As(err, &valueType):
+				offset = valueType.Offset
+			}
+			if offset > 0 {
+				line = bytes.Count(data[:offset-1], []byte("\n")) + 1
+			}
+			return fmt.Errorf("%s:%d: invalid compiler input JSON: %v; write a JSON array of TypeScript filenames.", manifest, line, err)
 		}
+		offset := 0
 		for _, name := range names {
+			line := 0
+			if index := bytes.Index(data[offset:], []byte(strconv.Quote(name))); index >= 0 {
+				offset += index
+				line = bytes.Count(data[:offset], []byte("\n")) + 1
+				offset += len(strconv.Quote(name))
+			}
 			if filepath.Base(name) != name || strings.ContainsAny(name, `/\`) || !strings.HasSuffix(name, ".ts") || strings.HasSuffix(name, ".d.ts") {
-				return safeerror.New(fmt.Sprintf("%s: invalid compiler input %q", manifest, name))
+				return safeerror.New(fmt.Sprintf("%s:%d: invalid compiler input %q; use a handwritten .ts filename from this fixture directory.", manifest, line, name))
 			}
 			source := directory + "/" + name
 			if inputs[source] {
-				return safeerror.New(fmt.Sprintf("%s: repeated compiler input %q", manifest, name))
+				return safeerror.New(fmt.Sprintf("%s:%d: repeated compiler input %q; remove the duplicate manifest entry.", manifest, line, name))
 			}
 			inputs[source] = true
 		}
@@ -76,10 +100,10 @@ func CheckGoInputs(root string, documents []Document, input io.Reader) error {
 			break
 		}
 		if err != nil {
-			return safeerror.Prefix("fixture compiler inputs", err)
+			return fmt.Errorf("fixture compiler inputs:0: invalid JSON near byte %d: %v; regenerate the list with go list -json in the fixture module.", decoder.InputOffset(), err)
 		}
 		if pkg.Incomplete || pkg.Error != nil || !filepath.IsAbs(pkg.Dir) {
-			return safeerror.New(fmt.Sprintf("fixture compiler inputs: incomplete package %q", pkg.Dir))
+			return safeerror.New(fmt.Sprintf("fixture compiler inputs: incomplete package %q; regenerate the input list with go list -json in the fixture module.", pkg.Dir))
 		}
 		for _, group := range [][]string{pkg.GoFiles, pkg.CgoFiles, pkg.TestGoFiles, pkg.XTestGoFiles} {
 			for _, file := range group {
@@ -98,7 +122,7 @@ func checkInputs(documents []Document, extension string, inputs map[string]bool)
 	for _, document := range documents {
 		for _, inclusion := range document.Inclusions {
 			if strings.HasSuffix(inclusion.Source, extension) && !inputs[inclusion.Source] {
-				return safeerror.New(fmt.Sprintf("%s:%d: %s#%s is not a compiler input", inclusion.Document, inclusion.Line, inclusion.Source, inclusion.Region))
+				return safeerror.New(fmt.Sprintf("%s:%d: %s#%s is not a compiler input; move the example into a selected fixture source or add it to the fixture’s compiler inputs.", inclusion.Document, inclusion.Line, inclusion.Source, inclusion.Region))
 			}
 		}
 	}

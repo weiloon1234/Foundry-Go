@@ -9,7 +9,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/database/orm/rows"
 )
 
-// guide:computed-text-row
 // doc-example:begin computed-text
 type noteSide struct{}
 
@@ -24,9 +23,9 @@ func noteSearch(term scalarqueries.Label) orm.Query[scalarqueries.Sample] {
 		Where(expr.Equal(expr.At(inner, scalarqueries.Samples.ID), expr.At(outer, scalarqueries.Samples.ID))).Limit(1)
 	text := expr.TextNullableRowValue(rows.CorrelatedScalarNullableRowQuery(scalar))
 	return expr.Where(scalarqueries.Samples.Query(), expr.NullableTextIContains(text, term))
-} // doc-example:end computed-text
+}
 
-// guide:end
+// doc-example:end computed-text
 
 func TestComputedTextRowGuide(t *testing.T) {
 	if _, err := rows.CompileRead(rows.Read(rows.FromModel(noteSearch("AL")))); err != nil {

@@ -29,7 +29,9 @@ var ProfileField = expr.JSONFieldOf(func(p *Preferences) *value.Optional[Profile
 
 var NameField = expr.JSONFieldOf(func(p *Profile) *string { return &p.Name })
 
-var AgeField = expr.JSONFieldOf(func(p *Profile) *int64 { return &p.Age }) // doc-example:end json-models
+var AgeField = expr.JSONFieldOf(func(p *Profile) *int64 { return &p.Age })
+
+// doc-example:end json-models
 
 var NicknameField = expr.JSONFieldOf(func(p *Profile) **string { return &p.Nickname })
 

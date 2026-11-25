@@ -13,7 +13,7 @@
 
 Runtime and consumer races, PostgreSQL, compiler-rejection, actual-gopls and
 full repository checks have passed. The
-[master roadmap](../../blueprint/00-master-architecture-and-parity.md) owns milestone status.
+master roadmap owns milestone status.
 
 <a id="recipe-declare-event"></a>
 ## Declare and dispatch an event

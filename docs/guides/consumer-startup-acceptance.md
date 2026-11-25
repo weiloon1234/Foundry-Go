@@ -3,9 +3,9 @@
 All five milestones, C01–C05, are accepted. C05 passed its pre-audit native gate
 in 534.1 seconds and its final post-audit gate in 494.9 seconds, then passed private
 packaging, native measurements, command signal checks and security review.
-The [master blueprint](../../blueprint/00-master-architecture-and-parity.md#consumer-startup-delivery)
-owns milestone status. [Final evidence](../evidence/consumer-startup-c05.json),
-[native results](../evidence/consumer-startup-c05-native.json) and the
+The master blueprint
+owns milestone status. Final evidence,
+native results and the
 [complete change audit](consumer-startup-audit.md) retain the proof and limitations.
 
 <a id="agent-entry"></a>
@@ -68,14 +68,14 @@ and attribution and concrete actor arguments for authenticated handlers.
 
 | Requirement | Current source and evidence |
 | --- | --- |
-| Single typed config schema | [C01 acceptance](../evidence/consumer-startup-c01.json), generator config fixtures and `startupconfig` consumer |
-| Named/default identity and isolation | [C02 acceptance](../evidence/consumer-startup-c02.json), infrastructure tests, configured profile identity test |
+| Single typed config schema | C01 acceptance, generator config fixtures and `startupconfig` consumer |
+| Named/default identity and isolation | C02 acceptance, infrastructure tests, configured profile identity test |
 | PostgreSQL-only database | Infrastructure database settings and existing `database/postgres` adapter |
 | Four cache backends with unchanged domain code | [Switch regression](../../tests/fixtures/consumer/configuredprofile/backend_switch_test.go), shared cache backend contracts and C02 native evidence |
 | Local/S3/R2 selection | Same switch regression: local read/write and real cloud signing; [storage certification](storage.md) retains its recorded live-provider scope |
-| Minimal typed web bootstrap | [C03 acceptance](../evidence/consumer-startup-c03.json), compact profile plus PostgreSQL/auth/upload bootstrap fixture |
+| Minimal typed web bootstrap | C03 acceptance, compact profile plus PostgreSQL/auth/upload bootstrap fixture |
 | Model-specific actors and browser CSRF | Bootstrap persistent test, C03/C04 compiler failures and HTTP regressions |
-| Supporting services and one selected kernel | [C04 acceptance](../evidence/consumer-startup-c04.json), jobs/events/scheduler/realtime and manager fixtures |
+| Supporting services and one selected kernel | C04 acceptance, jobs/events/scheduler/realtime and manager fixtures |
 | Constructor-safe audit dependency | [Scope regression](../../tests/fixtures/consumer/configuredprofile/audit_scope_test.go), exact pool, restored schema and business rollback |
 | Ownership and independent applications | C02/C03/C04 startup rollback, shutdown, borrowed resource and race checks |
 | IDE completion and compiler rejection | Real gopls probes and independent batched negative compiler cases in the full gate |

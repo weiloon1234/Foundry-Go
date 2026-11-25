@@ -14,7 +14,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/storage"
 )
 
-// migration:pilot2-boolean-enum
+// doc-example:begin pilot2-boolean-enum
 type CountryFlag struct {
 	Status  countries.Status
 	Enabled bool
@@ -29,9 +29,9 @@ var CountryFlags = rows.Define(func(b rows.Builder[CountryFlag], r *CountryFlag)
 	return CountryFlagColumns{b.Row(), rows.EnumOf(b, &r.Status), rows.BoolOf(b, &r.Enabled)}
 })
 
-// migration:end
+// doc-example:end pilot2-boolean-enum
 
-// migration:pilot2-row-constant
+// doc-example:begin pilot2-row-constant
 func enabledAdmins() rows.Scalar[Admin, bool] {
 	enabled := expr.When(expr.Eq(expr.Value(Admins.Username), "active"),
 		expr.Constant[Admin](codec.Bool[bool](), true)).Else(expr.Constant[Admin](codec.Bool[bool](), false))
@@ -44,16 +44,16 @@ func scopedUsername() {
 	_ = parameter
 }
 
-// migration:end
+// doc-example:end pilot2-row-constant
 
-// migration:pilot2-json-startup
+// doc-example:begin pilot2-json-startup
 func validateJSONDeclarations() error {
 	// JSONFieldOf already resolved the selector; surface its stored error at startup.
 	// orm.Check validates tables, not standalone JSON field bindings.
 	return Theme.Validate()
 }
 
-// migration:end
+// doc-example:end pilot2-json-startup
 
 // The Go slot is Gallery; the persisted collection remains "public-media".
 // Bind the field with orm.SlotOf in the model declaration, without a foundry tag.

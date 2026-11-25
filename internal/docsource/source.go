@@ -12,8 +12,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/internal/safeerror"
 )
 
-var trailingMarker = regexp.MustCompile(`^(.*\S)[ \t]+(// doc-example:(?:begin|end) [a-z0-9]+(?:-[a-z0-9]+)*)$`)
-
 var regionMarker = regexp.MustCompile(`^// doc-example:(begin|end) ([a-z0-9]+(?:-[a-z0-9]+)*)$`)
 
 type excerpt struct {
@@ -61,7 +59,11 @@ func readSource(root, name string) (source, error) {
 	if ext == ".go" {
 		language = "go"
 	}
-	return parseSource(string(data), language)
+	parsed, err := parseSource(string(data), language)
+	if err != nil {
+		return source{}, fmt.Errorf("%s:%s", name, strings.TrimPrefix(err.Error(), "line "))
+	}
+	return parsed, nil
 }
 
 func parseSource(data, language string) (source, error) {
@@ -73,7 +75,7 @@ func parseSource(data, language string) (source, error) {
 		}
 		offset += n
 		if !comments[offset] {
-			return source{}, safeerror.New(fmt.Sprintf("line %d: region marker must be an actual line comment, outside literals and block comments", strings.Count(data[:offset], "\n")+1))
+			return source{}, safeerror.New(fmt.Sprintf("line %d: region marker must be an actual line comment, outside literals and block comments; move the marker outside the literal or block comment.", strings.Count(data[:offset], "\n")+1))
 		}
 		offset += len("// doc-example:")
 	}
@@ -85,19 +87,9 @@ func parseSource(data, language string) (source, error) {
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		marker := regionMarker.FindStringSubmatch(trimmed)
-		trailing := ""
 		if marker == nil {
-			if match := trailingMarker.FindStringSubmatch(strings.TrimSuffix(line, "\n")); match != nil {
-				trailing = match[1]
-				if strings.HasSuffix(line, "\n") {
-					trailing += "\n"
-				}
-				marker = regionMarker.FindStringSubmatch(match[2])
-			}
-		}
-		if marker == nil {
-			if strings.HasPrefix(trimmed, "// doc-example:") {
-				return source{}, safeerror.New(fmt.Sprintf("line %d: malformed region marker", i+1))
+			if strings.Contains(trimmed, "// doc-example:") || strings.HasPrefix(trimmed, "// migration:") || strings.HasPrefix(trimmed, "// guide:") {
+				return source{}, safeerror.New(fmt.Sprintf("line %d: region marker must use a standalone // doc-example:begin or // doc-example:end comment; put each marker alone on a line.", i+1))
 			}
 			whole.WriteString(line)
 			continue
@@ -105,34 +97,38 @@ func parseSource(data, language string) (source, error) {
 		name := marker[2]
 		if marker[1] == "begin" {
 			if active != "" {
-				return source{}, safeerror.New(fmt.Sprintf("line %d: overlapping regions %s and %s", i+1, active, name))
+				return source{}, safeerror.New(fmt.Sprintf("line %d: overlapping regions %s and %s; close the first region before starting another.", i+1, active, name))
 			}
 			if _, exists := result.regions[name]; exists {
-				return source{}, safeerror.New(fmt.Sprintf("line %d: duplicate region %s", i+1, name))
+				return source{}, safeerror.New(fmt.Sprintf("line %d: duplicate region %s; give the second region a different name.", i+1, name))
 			}
 			active, start = name, i+1
-			if trailing != "" {
-				lines[i] = trailing
-				start = i
-				whole.WriteString(trailing)
-			}
 		} else {
 			if active != name {
-				return source{}, safeerror.New(fmt.Sprintf("line %d: unmatched region end %s", i+1, name))
+				return source{}, safeerror.New(fmt.Sprintf("line %d: unmatched region end %s; match its name to an open begin marker.", i+1, name))
+			}
+			firstBoundary, lastBoundary := start, i-1
+			for firstBoundary <= lastBoundary && strings.TrimSpace(lines[firstBoundary]) == "" {
+				firstBoundary++
+			}
+			for lastBoundary >= firstBoundary && strings.TrimSpace(lines[lastBoundary]) == "" {
+				lastBoundary--
+			}
+			if firstBoundary <= lastBoundary {
+				for _, boundary := range []int{firstBoundary, lastBoundary} {
+					if strings.TrimSpace(lines[boundary]) == "//" {
+						return source{}, safeerror.New(fmt.Sprintf("line %d: region %s begins or ends with a bare comment separator; move the region marker outside the comment group, or include the whole comment.", boundary+1, name))
+					}
+				}
 			}
 			text := strings.Join(lines[start:i], "")
 			last := i
-			if trailing != "" {
-				text += trailing
-				whole.WriteString(trailing)
-				last = i + 1
-			}
 			result.regions[name] = excerpt{text: dedent(trimRegionBlankLines(text)), first: start + 1, last: last}
 			active = ""
 		}
 	}
 	if active != "" {
-		return source{}, safeerror.New(fmt.Sprintf("unclosed region %s", active))
+		return source{}, safeerror.New(fmt.Sprintf("line %d: unclosed region %s; add its matching end marker.", start, active))
 	}
 	result.whole = excerpt{text: dedent(whole.String()), first: 1, last: len(lines)}
 	return result, nil

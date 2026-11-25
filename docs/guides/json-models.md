@@ -125,4 +125,13 @@ SQL and [plans](query-plans.md) before choosing an index.
 Call each binding's `Validate()` before executor access; `orm.Check` only checks
 table declarations, not unattached JSON fields. Go checks the payload and result
 types, while startup validation checks pointer ownership, JSON tags and custom
-encoding constraints. See the compiled [startup example](orm-migration.md#validate-json-property-declarations-at-startup).
+encoding constraints. [Compiled excerpt, imports and enclosing context](../../tests/fixtures/goway/migration/pilot2_test.go):
+
+<!-- compiled-source: tests/fixtures/goway/migration/pilot2_test.go#pilot2-json-startup -->
+```go
+func validateJSONDeclarations() error {
+	// JSONFieldOf already resolved the selector; surface its stored error at startup.
+	// orm.Check validates tables, not standalone JSON field bindings.
+	return Theme.Validate()
+}
+```

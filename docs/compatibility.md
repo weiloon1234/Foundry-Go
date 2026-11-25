@@ -309,9 +309,9 @@ now returns the unselected `rows.SelectionSource[S]` instead of a `rows.Query[S,
 The nine direct constructors (`Text`, `Number`, `Time`, `Enum`, `Bool` and the four
 `Nullable*` forms) keep their call-site text but take a `validation.Binding`. A row
 DTO is declared `//foundry:dto role=row`, and its generated `XRowColumns()` replaces
-`XRowValidationFields()`. The [changelog](../CHANGELOG.md) lists every removed name and
-the [migration guide](guides/orm-migration.md#datatable-columns-and-sources) gives the
-from → to steps.
+`XRowValidationFields()`. The [datatable guide](guides/datatable.md) teaches current column and source
+declarations. The [retired-names ledger](../internal/retirement/denied.json) gives
+the replacement for documented retired names.
 
 Applications must convert every table before updating the framework pin; there are
 no compatibility aliases, and the old and new spellings do not compile together.
@@ -324,8 +324,9 @@ This release replaces the per-kind ORM operator, assignment and adapter function
 with one function per operation that takes the column directly, and adds nine
 direct column constructors to `datatable`. 262 functions and 36 adapter or
 interface types leave `database/orm`, including `orm.KeyNotIn` (now `orm.NotIn`).
-The [changelog](../CHANGELOG.md) and the [migration guide](guides/orm-migration.md)
-list every removed family and its replacement.
+The [query guide](guides/model-queries.md) teaches current operators. The
+[retired-names ledger](../internal/retirement/denied.json) gives the replacement
+for documented retired names.
 
 Applications must convert every call site before updating the framework pin;
 there are no compatibility aliases. This is a source compatibility change. SQL
@@ -588,10 +589,22 @@ and remain readable without fixture sources or TypeScript tools.
 The pinned tool must match both the effective module path and version, including
 versioned replacements; an equal version on a different module is not a match.
 
-Former API teaching belongs in labeled blocks in the designated ORM and v0.2
-migration guides. The existing `orm-example: name-before` mechanism covers one
-fence, mapping table, or paragraph. Active guides and application instructions
-have no retirement exception, including app-owned skill regions.
+Guides, `AGENTS.md` files and skills bind Go and TypeScript examples with
+`<!-- compiled-source: path[#region] -->` and standalone
+`// doc-example:begin|end name` boundaries. Region names are unique per source
+file; multiple documents may include the same region. No document has a binding
+or retirement exemption. All fences require a supported language tag; indented
+and HTML code blocks are refused. The tag is the contract; executable-code
+detection in `text` fences is best effort. Framework TSX examples are unsupported; application
+source binding is a separate application tooling change.
+
+The ORM migration guide is removed. Use [model declarations](guides/model-declarations.md),
+[conditional expressions](guides/conditional-expressions.md),
+[projection declarations](guides/model-projections.md), and
+[JSON models](guides/json-models.md) for current recipes. The
+[retired-names ledger](../internal/retirement/denied.json) gives the replacement
+when one was documented. Entries without one omit that field, and diagnostics
+say that no replacement is recorded.
 
 Review reference diagnostics alongside runtime and generator changes during an
 upgrade. A rollback must restore compatible application references and workflow
@@ -1051,7 +1064,7 @@ Handwritten typed tables use `orm/expr` for expressions and `orm/rows` for
 projections, sets and CTEs. Use `expr.AsSelected(row)` for selection. Shared
 lowering preserves bindings, hydration and lifecycle behavior without a parallel
 query runtime. See [typed field computations](guides/typed-field-computations.md)
-and the [migration guide](guides/orm-migration.md#removed-api-spellings).
+and [model projections](guides/model-projections.md).
 The [build measurements](guides/query-build-resources.md) retain historical cost
 evidence; they do not describe a second supported runtime.
 

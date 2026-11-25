@@ -55,7 +55,9 @@ func tableQuery[S, R, A any](table datatable.Table[S, R, A], id h.RouteID, path 
 	return endpoint.Handle(func(context.Context, h.Input[h.NoPath, h.NoQuery, datatable.Request]) (pagination.NumberedResponse[R], error) {
 		return pagination.NumberedResponse[R]{Data: []R{}}, nil
 	})
-} // doc-example:end datatable-3
+}
+
+// doc-example:end datatable-3
 
 // TableBindingsManifest exercises ticket, direct-file, query-only and download-only tables.
 func TableBindingsManifest(ctx context.Context) (*manifest.Manifest, error) {
@@ -72,7 +74,8 @@ func TableBindingsManifest(ctx context.Context) (*manifest.Manifest, error) {
 
 	reportsDirectRoute := h.DefineRoute(h.RouteSpec{ID: "reports.direct", Method: h.GET, Access: h.Public}, TableFilePathDescriptor())
 	reportsDirectEndpoint := h.DefineEndpoint(reportsDirectRoute, TableDownloadQueryDescriptor(), h.EmptyBody(), h.DownloadResponse("text/csv"))
-	direct := datatable.BindFileExport(reporting.Orders, reportsDirectEndpoint) // doc-example:end datatable-4
+	direct := datatable.BindFileExport(reporting.Orders, reportsDirectEndpoint)
+	// doc-example:end datatable-4
 	router, err := h.NewRouter(tableQuery(reporting.Members, "admin.inventory", "/members"), tableQuery(reporting.NumericLevels, "admin.levels", "/levels"),
 		ticket.Handle(func(context.Context, h.Input[h.NoPath, h.NoQuery, TableExportRequest]) (TableExportResource, error) {
 			return TableExportResource{}, nil

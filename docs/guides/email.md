@@ -11,9 +11,9 @@
 ## Overview
 
 Milestone 16 passed native verification and consumer review. Real-account provider
-smoke sends remain an explicit verification gap. The stable blueprint contract is [email](../../blueprint/16-email.md).
+smoke sends remain an explicit verification gap. The stable blueprint contract is email.
 The Cloudflare and direct attachment source additions passed the
-[2026-10-03 follow-up checks](../evidence/mail-system-20261003.json).
+2026-10-03 follow-up checks.
 
 `email` owns validated addresses, immutable message builders, typed templates, bounded attachment resolution and MIME. A `Mailer` borrows a transport and the existing storage registry. Use the ordinary [jobs](jobs.md) API for queued data and transactional publication; there is no separate email queue.
 
@@ -337,7 +337,7 @@ Call `WelcomeEmail.Capture` before a retriable business transaction when its exe
 
 Observers receive safe `Prepared` and `Finished` notices. A Prepared failure vetoes submission. A Finished failure sets `Result.ObserverFailed` and diagnostic counts while preserving known acceptance, avoiding accidental duplicate retries. `Snapshot` exposes counts/active/closing state without private content. Protect application diagnostic endpoints with existing authorization.
 
-`testkit/email.AssertCount` and `AssertRecipientCount` work with the memory driver and redact assertion failure text. Test sources include MIME/escaping/injection/bounds, reader closure, callback ownership, native local SMTP/TLS/STARTTLS, provider HTTP contract fixtures, response loss, typed queue retries, real PostgreSQL rollback/commit visibility, and an independent consumer module. Compiler-rejection and real-gopls probes cover typed boundaries. These passed the native acceptance gate; see the [master evidence](../../blueprint/00-master-architecture-and-parity.md#milestone-16-verification-and-consumer-review).
+`testkit/email.AssertCount` and `AssertRecipientCount` work with the memory driver and redact assertion failure text. Test sources include MIME/escaping/injection/bounds, reader closure, callback ownership, native local SMTP/TLS/STARTTLS, provider HTTP contract fixtures, response loss, typed queue retries, real PostgreSQL rollback/commit visibility, and an independent consumer module. Compiler-rejection and real-gopls probes cover typed boundaries. These passed the native acceptance gate; see the master evidence.
 
 Real-account sends have not been run. Provider credentials, verified sender identities and an explicitly approved recipient are required for those smokes; local protocol fixtures do not prove external deliverability. No new provider account, dependency or email to an external recipient was created by this milestone implementation.
 

@@ -23,7 +23,8 @@ func TestFilteredAggregatePhaseSQLParity(t *testing.T) {
 	selected := rows.Select(rows.From(models.Orders.Query()), reports.OrderSummaries,
 		rows.MapSelected(reports.OrderSummaries.Total, expr.AsSelected(total)),
 		rows.MapSelected(reports.OrderSummaries.Count, expr.AsSelected(count)))
-	got, err := rows.CompileRead(rows.Read(rows.Having(selected, expr.HavingAnd(expr.GtValue(count, 0), expr.GtValue(total, decimal.FromInt64(1)), expr.EqValue(exists, true))))) // doc-example:end model-aggregate-filters
+	got, err := rows.CompileRead(rows.Read(rows.Having(selected, expr.HavingAnd(expr.GtValue(count, 0), expr.GtValue(total, decimal.FromInt64(1)), expr.EqValue(exists, true)))))
+	// doc-example:end model-aggregate-filters
 	if err != nil {
 		t.Fatal(err)
 	}

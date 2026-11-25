@@ -11,7 +11,7 @@
 ## Overview
 
 Milestone 17 passed native verification and consumer review. The
-[master evidence](../../blueprint/00-master-architecture-and-parity.md#milestone-17-verification-and-consumer-review)
+master evidence
 records the full gate, focused regressions and operational limits.
 
 `notifications` binds a versioned input DTO to a typed recipient and channel
@@ -288,4 +288,4 @@ Default formatting omits captured payloads, routes and rendered content.
 No new dependency or external email provider send is required by notifications.
 Email transport support and the remaining real-provider smoke gap are documented
 in [email](email.md). Verification evidence is recorded in the
-[master roadmap](../../blueprint/00-master-architecture-and-parity.md#milestone-17-verification-and-consumer-review).
+master roadmap.

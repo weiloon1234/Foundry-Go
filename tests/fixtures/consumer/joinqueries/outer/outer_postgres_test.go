@@ -25,7 +25,8 @@ func TestPostgresOuterAndChainedJoins(t *testing.T) {
 		s := rows.Scope(sponsors)
 		joined := rows.LeftJoin(referrals, sponsors, rows.On(expr.At(r, models.Users.IntroducerID), expr.At(s, models.Users.ID)))
 		referralScope := rows.LeftScope(joined, rows.Scope(referrals))
-		sponsorScope := rows.NullableRightScope(joined, rows.Scope(sponsors)) // doc-example:end model-joins
+		sponsorScope := rows.NullableRightScope(joined, rows.Scope(sponsors))
+		// doc-example:end model-joins
 		sponsor := sponsorScope
 		purchases := rows.As[purchaseAlias](models.Orders.Query(), "purchase")
 		p := rows.Scope(purchases)

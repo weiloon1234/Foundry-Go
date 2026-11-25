@@ -12,6 +12,6 @@ Measure the affected consumer archive with the same toolchain and build settings
 a smaller linked binary alone does not prove a smaller generic compile footprint.
 
 See [typed field computations](typed-field-computations.md), the
-[ORM migration guide](orm-migration.md), and the
-[historical measurements](../evidence/goway-query-build-resources-historical.md).
+[model projection guide](model-projections.md), and the
+historical measurements.
 The historical source names describe their measured revisions, not current APIs.

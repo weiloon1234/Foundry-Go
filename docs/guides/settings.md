@@ -1,7 +1,7 @@
 # Settings
 
 Milestone 18 passed native verification and consumer review. The
-[master evidence](../../blueprint/00-master-architecture-and-parity.md#milestone-18-verification-and-consumer-review)
+master evidence
 records the checks and operational limits.
 
 <a id="agent-entry"></a>

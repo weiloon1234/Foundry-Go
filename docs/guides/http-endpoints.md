@@ -20,7 +20,7 @@ generation, consumer race tests, six new compiler-rejection cases and vet passed
 Canonical generation, consumer checks and actual editor probes also passed.
 Full regression verification also passed. [Typed validation](validation.md) now
 adds generated field rules and endpoint integration; its focused checks passed.
-[Route-model binding](http-model-binding.md), [pagination adapters](http-pagination.md) and additional validation/middleware are available. Combined transport acceptance passed; the [HTTP blueprint](../../blueprint/08-http-validation-and-responses.md) records current milestone status.
+[Route-model binding](http-model-binding.md), [pagination adapters](http-pagination.md) and additional validation/middleware are available. Combined transport acceptance passed; the HTTP blueprint records current milestone status.
 
 An endpoint combines a route, query declaration, request body and response
 descriptor. Write each route-declaring call in its own statement, passing the

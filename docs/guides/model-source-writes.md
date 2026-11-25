@@ -4,7 +4,7 @@
 
 ## Match identities and map stored values
 
-<!-- orm-example: source-update -->
+<!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#source-update -->
 ```go
 func updateMemberBodies(ctx context.Context, tx *database.Tx) (int64, error) {
 	f := hooks.Members
@@ -30,7 +30,7 @@ An SQL-mapped update with multiple source matches for one affected destination f
 
 ## Delete using a source
 
-<!-- orm-example: source-delete -->
+<!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#source-delete -->
 ```go
 func deleteMatchingMembers(ctx context.Context, tx *database.Tx) (int64, error) {
 	f := hooks.Members

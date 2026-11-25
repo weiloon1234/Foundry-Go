@@ -16,7 +16,9 @@ import (
 )
 
 // doc-example:begin http-model-binding-show-request
-type ShowRequest = modelbinding.Input[httpkernel.UserPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User] // doc-example:end http-model-binding-show-request
+type ShowRequest = modelbinding.Input[httpkernel.UserPath, foundryhttp.NoQuery, foundryhttp.NoBody, models.User]
+
+// doc-example:end http-model-binding-show-request
 
 var Show = foundryhttp.DefineEndpoint(
 	httpkernel.ShowUser,
@@ -40,7 +42,9 @@ func Router(db database.Executor, service Service) (*foundryhttp.Router, error) 
 	bound := modelbinding.Bind(showUserBinding, showUserEndpoint)
 
 	return foundryhttp.NewRouter(bound.Handle(service.Show))
-} // doc-example:end http-model-binding-user-by-id
+}
+
+// doc-example:end http-model-binding-user-by-id
 
 type Presenter struct{}
 
@@ -67,4 +71,6 @@ func OrderWithinUser(db database.Executor) modelbinding.Resolver[OrderPath, mode
 	return modelbinding.Define(func(ctx context.Context, p OrderPath) (value.Optional[models.Order], error) {
 		return orm.Keyed(models.Orders.Query().Where(orm.Eq(models.Orders.BuyerID, p.User)), models.Orders.Key()).Find(ctx, db, p.Order)
 	})
-} // doc-example:end http-model-binding-order-within-user
+}
+
+// doc-example:end http-model-binding-order-within-user

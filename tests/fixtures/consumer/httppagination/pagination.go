@@ -34,7 +34,9 @@ var List = func() pagination.NumberedEndpoint[foundryhttp.NoPath, MemberFilters,
 		membersIndexRoute,
 		MemberFiltersDescriptor(), MemberResponseJSON(), pagination.DefaultConfig(),
 	)
-}() // doc-example:end http-pagination-list-request
+}()
+
+// doc-example:end http-pagination-list-request
 
 type Service interface {
 	List(context.Context, ListRequest) (orm.PageResult[MemberResponse], error)
@@ -56,7 +58,9 @@ func (s DatabaseService) List(ctx context.Context, in ListRequest) (orm.PageResu
 		return orm.PageResult[MemberResponse]{}, err
 	}
 	return pagination.MapPage(ctx, page, PresentMember)
-} // doc-example:end http-pagination-example-2
+}
+
+// doc-example:end http-pagination-example-2
 
 // PresentMember explicitly chooses read accessors. Persisted identity stays
 // model-owned and untouched; a getter failure aborts the complete response.

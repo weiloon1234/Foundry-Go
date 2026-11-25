@@ -10,11 +10,11 @@
 ## Overview
 
 Milestone 18 passed native verification and consumer review. The
-[master evidence](../../blueprint/00-master-architecture-and-parity.md#milestone-18-verification-and-consumer-review)
+master evidence
 records the checks and operational limits.
-The [imaging expansion](../../blueprint/18-imaging-and-model-extensions.md#imaging-expansion--2026-10-03)
+The imaging expansion
 also passed its final portable/native, consumer and framework verification gates.
-The [runtime-loading follow-up](../evidence/imaging-runtime-loading-20261004.json)
+The runtime-loading follow-up
 passed ordinary native builds, missing-library consumers and the full gate.
 
 <a id="recipe-process-image"></a>

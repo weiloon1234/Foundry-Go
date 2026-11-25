@@ -101,7 +101,7 @@ read-only in the Foundry-Go-mainfix worktree.
   failure prevents pool admission. Registration inside a rewriter, including
   same-pointer registration, rejects the statement and discards the connection
   without automatic retry. See the
-  [registration migration contract](../guides/orm-migration.md#move-postgresql-type-registration-into-connection-setup).
+  [registration migration contract](https://github.com/weiloon1234/Foundry-Go/blob/7b364318/docs/guides/orm-migration.md#move-postgresql-type-registration-into-connection-setup).
 
 ## Integration prerequisites for this guide
 

@@ -217,7 +217,7 @@ exclusions, without exposing local paths or fabricating a JSON DTO. Download
 and stream response guides describe the shared transfer and cleanup behavior.
 
 Runtime, lifecycle, independent-consumer, compiler and actual-gopls checks passed.
-The [master acceptance record](../../blueprint/00-master-architecture-and-parity.md#milestone-08-static-assets-and-spa-focused-acceptance)
+The master acceptance record
 tracks verification and the remaining milestone scope.
 
 <a id="recipe-declare-spa"></a>

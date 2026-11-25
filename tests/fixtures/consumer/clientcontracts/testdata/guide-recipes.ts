@@ -175,3 +175,52 @@ export async function requestHeaders(api: sdk.API) {
   });
 }
 // doc-example:end request-headers
+
+// doc-example:begin validation-error-code
+export function isValidationFailure(error: unknown): boolean {
+  return error instanceof sdk.APIError && error.code === sdk.ErrorCode.ValidationFailed;
+}
+// doc-example:end validation-error-code
+
+// doc-example:begin request-lifecycle
+export function startRequest(
+  api: sdk.API,
+  request: sdk.Operations["itemsEcho"]["request"],
+  receive: (value: sdk.Operations["itemsEcho"]["response"]) => void,
+  report: (error: unknown) => void,
+): () => void {
+  const controller = new AbortController();
+  void api.itemsEcho(request, { signal: controller.signal }).then(receive, (error: unknown) => {
+    if (!controller.signal.aborted) report(error);
+  });
+  return () => controller.abort();
+}
+// doc-example:end request-lifecycle
+
+// doc-example:begin form-state-provider
+export function bindFormOperations(issues: readonly sdk.Issue[]) {
+  type Draft = Required<Pick<sdk.FormValues<sdk.Operations["itemsEcho"]["request"]["body"]>, "amount">>;
+  const label = (key: sdk.FieldMessageKey): string => key;
+  let values: Draft = { amount: "0" };
+  const update: sdk.FormUpdate<Draft> = (next) => { values = next(values); };
+
+  const singleState = sdk.formFieldState();
+  const singleFields = sdk.fieldBinder(label, () => singleState);
+  const single = singleFields(sdk.operation("itemsEcho"), values, update, issues);
+  sdk.commitFormFields(singleState);
+
+  const combinedState = sdk.formFieldState();
+  const combinedFields = sdk.fieldBinder(label, () => combinedState);
+  const [items, generic] = combinedFields(
+    [sdk.operation("itemsEcho"), sdk.operation("genericEcho")], values, update, issues,
+  );
+  sdk.commitFormFields(combinedState);
+  return { single, items, generic };
+}
+// doc-example:end form-state-provider
+
+// doc-example:begin submission-key
+export function submissionKey(): sdk.IdempotencyKey {
+  return sdk.idempotencyKey(crypto.randomUUID());
+}
+// doc-example:end submission-key

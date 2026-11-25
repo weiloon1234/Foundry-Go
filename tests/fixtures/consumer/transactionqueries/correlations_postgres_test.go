@@ -22,7 +22,8 @@ func TestPostgresTransactionLateralRowsAndLocks(t *testing.T) {
 	child := rows.AsTransaction[otherAlias](rows.TransactionOf(rows.ModelRecord(Records.Query())), "child")
 	c := rows.TransactionCorrelate(parent, child)
 	p, f := recordAt(rows.TransactionOuterScope(c, rows.TransactionScope(parent))), recordAt(rows.TransactionInnerScope(c, rows.TransactionScope(child)))
-	c = c.Where(expr.Greater(f.ID, p.ID)) // doc-example:end transaction-correlations
+	c = c.Where(expr.Greater(f.ID, p.ID))
+	// doc-example:end transaction-correlations
 	report := rows.ProjectTransactionCorrelated(c, Summaries, rows.MapSelected(Summaries.ID, expr.AsSelected(expr.Row(f.ID))), rows.MapSelected(Summaries.Name, expr.AsSelected(expr.Row(p.Name)))).OrderBy(expr.Asc(f.ID)).Limit(1).ForNoKeyUpdate().Of(rows.Target(rows.TransactionInnerScope(c, rows.TransactionScope(child))))
 	lateral := rows.AsTransactionLateral[correlatedLateralAlias](report, "chosen")
 	left := rows.TransactionLeftJoinLateral(parent, lateral)

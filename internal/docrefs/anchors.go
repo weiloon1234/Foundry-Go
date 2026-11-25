@@ -33,7 +33,7 @@ func IndexAnchors(name string, data []byte) (Anchors, error) {
 		}
 		id := match[1]
 		if previous, exists := index.lines[id]; exists {
-			failures = append(failures, problem(name, line, fmt.Sprintf("duplicate explicit anchor %q (first declared on line %d)", id, previous)))
+			failures = append(failures, problem(name, line, fmt.Sprintf("duplicate explicit anchor %q (first declared on line %d); rename or remove the second anchor.", id, previous)))
 			return
 		}
 		index.lines[id] = line
@@ -45,10 +45,10 @@ func IndexAnchors(name string, data []byte) (Anchors, error) {
 // checkdocs can use this for guide navigation links as well as app references.
 func (a Anchors) CheckFragment(file string, line int, fragment string) error {
 	if !identifier.MatchString(fragment) {
-		return problem(file, line, "invalid explicit anchor fragment "+fmt.Sprintf("%q", fragment))
+		return problem(file, line, "invalid explicit anchor fragment "+fmt.Sprintf("%q; use lowercase letters, digits and internal hyphens.", fragment))
 	}
 	if _, exists := a.lines[fragment]; !exists {
-		return problem(file, line, fmt.Sprintf("explicit anchor %q is absent", fragment))
+		return problem(file, line, fmt.Sprintf("explicit anchor %q is absent; link to an existing explicit anchor or add it to the target guide.", fragment))
 	}
 	return nil
 }
@@ -64,7 +64,7 @@ func CheckReferences(guidesDir string, refs []Reference) error {
 	var failures []error
 	for _, ref := range refs {
 		if !identifier.MatchString(ref.Guide) {
-			failures = append(failures, problem(ref.File, ref.Line, "invalid guide name"))
+			failures = append(failures, problem(ref.File, ref.Line, "invalid guide name; use a guide basename with lowercase letters, digits and internal hyphens."))
 			continue
 		}
 		p, loaded := pages[ref.Guide]
@@ -72,7 +72,7 @@ func CheckReferences(guidesDir string, refs []Reference) error {
 			name := filepath.Join(guidesDir, ref.Guide+".md")
 			info, err := os.Lstat(name)
 			if err != nil || !info.Mode().IsRegular() {
-				p.err = safeerror.New(fmt.Sprintf("selected framework guide %s is missing or is not a regular file", ref.Guide))
+				p.err = safeerror.New(fmt.Sprintf("selected framework guide %s is missing or is not a regular file; link to a regular guide file in the selected framework version", ref.Guide))
 			} else {
 				data, err := os.ReadFile(name)
 				if err != nil {
@@ -87,7 +87,7 @@ func CheckReferences(guidesDir string, refs []Reference) error {
 			failures = append(failures, safeerror.Prefix(fmt.Sprintf("%s:%d", ref.File, ref.Line), p.err))
 		} else if ref.Anchor != "" {
 			if err := p.anchors.CheckFragment(ref.File, ref.Line, ref.Anchor); err != nil {
-				failures = append(failures, safeerror.Prefix("guide "+ref.Guide, err))
+				failures = append(failures, err)
 			}
 		}
 	}

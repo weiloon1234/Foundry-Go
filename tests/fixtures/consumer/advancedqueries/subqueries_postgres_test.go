@@ -41,7 +41,8 @@ func checkDerivedReports(t *testing.T, tx *database.Tx, users []models.User) err
 		rowset.MapSelected(reports.BuyerTotalRows.Total, expr.AsSelected(expr.Sum(o.TotalCents))),
 		rowset.MapSelected(reports.BuyerTotalRows.Orders, expr.AsSelected(expr.Count[models.Order]())),
 		rowset.MapSelected(reports.BuyerTotalRows.Average, expr.AsSelected(expr.Avg(o.TotalCents))),
-	), expr.Group(expr.Value(o.BuyerID))) // doc-example:end model-projections
+	), expr.Group(expr.Value(o.BuyerID)))
+	// doc-example:end model-projections
 	// Grouping, HAVING and a selected window remain inside the derived source.
 	source := rowset.AsRecord[totalsAlias](rowset.RecordOf(rowset.Limit(rowset.OrderBy(rowset.Having(totals, expr.GteValue(expr.Count[models.Order](), 2)), expr.DescValue(expr.Count[models.Order]())), 1)), "totals")
 	fields := rowset.Scope(source)

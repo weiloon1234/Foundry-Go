@@ -2,7 +2,7 @@
 
 Typed security observations compose with existing events and outbox storage. Maintenance remains bounded, and account retirement joins the domain transaction.
 
-Milestone 10 passed native acceptance. See the [master roadmap](../../blueprint/00-master-architecture-and-parity.md#milestone-10-acceptance) for verification evidence and later integration boundaries.
+Milestone 10 passed native acceptance. See the master roadmap for verification evidence and later integration boundaries.
 
 ## Security events
 

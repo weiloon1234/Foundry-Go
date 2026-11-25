@@ -29,6 +29,7 @@ uses an integer key and four slot kinds:
 
 <!-- compiled-source: tests/fixtures/goway/models/extensions/models.go#model-extension-slots-article -->
 ```go
+// Article is a methodless extension owner. Example: Article{ID:1}.
 //
 //foundry:model table=extension_articles var=Articles key=ID identity=false
 type Article struct {
@@ -452,5 +453,4 @@ An old attachment slot's `foundry:"name=public-media"` tag becomes the explicit
 `"public-media"` argument to `attachments.ManyOf` or `attachments.OneOf`. Remove
 the tag: the generator recognizes the slot type, which is not a persisted column. Keep the
 owner identity and `StorageModel` unchanged as well as the collection name. A
-Go-field rename changes its binding, not that stored identity. See the compiled
-[migration example](orm-migration.md#preserve-an-attachment-slots-stored-name).
+Go-field rename changes its binding, not that stored identity. See [attachment collections](attachments.md).

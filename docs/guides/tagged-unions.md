@@ -1,8 +1,8 @@
 # Tagged payload unions
 
 T02 passed the native gate, typed consumer/client/compiler/editor checks, fuzzing
-and [cost measurements](../evidence/typed-api-t02.json). The
-[master](../../blueprint/00-master-architecture-and-parity.md#typed-api-delivery)
+and cost measurements. The
+master
 owns milestone status.
 
 Declare ordinary payload DTOs and list their Go types once:

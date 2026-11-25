@@ -1,7 +1,7 @@
 # Alternate keys and nested model binding
 
 T04 native verification passed. Acceptance status is owned by the
-[master](../../blueprint/00-master-architecture-and-parity.md#typed-api-delivery).
+master.
 The [independent consumer](../../tests/fixtures/consumer/nestedbindings/bindings.go)
 contains complete typed declarations and a three-level handler.
 
@@ -75,5 +75,5 @@ additional records, independently of the one parent lookup per chain level.
 
 T04 tests cover native PostgreSQL, duplicate/scoped keys, deeper relations,
 soft deletion, policy ordering, hooks, metadata, compiler rejection, IDE support
-and owned cancellation/concurrency. The [acceptance evidence](../evidence/typed-api-t04.json) records the passed
+and owned cancellation/concurrency. The acceptance evidence records the passed
 checks, source hashes and observed query counts.

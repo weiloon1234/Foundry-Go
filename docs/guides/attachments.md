@@ -14,7 +14,7 @@
 ## Overview
 
 Milestone 18 passed native verification and consumer review. The
-[master evidence](../../blueprint/00-master-architecture-and-parity.md#milestone-18-verification-and-consumer-review)
+master evidence
 records the checks and operational limits.
 
 A model can also declare collections as `attachments.One`/`Many` fields; see
@@ -802,5 +802,5 @@ must leave the intent unresolved.
 R2 supports conditional multipart create and replace up to `MaxObjectBytes`.
 Attachment upload policies and disk object-size limits still apply. Live
 certification also passed ranged reads of a 96 MiB object through the attachment
-seek reader. See the [resource and provider acceptance record](../evidence/b26-resource-provider-acceptance.md)
+seek reader. See the resource and provider acceptance record
 for measurements, deployment gaps and live-provider evidence.

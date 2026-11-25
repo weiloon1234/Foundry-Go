@@ -6,7 +6,7 @@ import (
 )
 
 func TestCurrentModelGuideRejectsRetiredTeaching(t *testing.T) {
-	const link = "\n[Migration](orm-migration.md)\n"
+	const link = "\n[Migration](model-declarations.md)\n"
 	for _, example := range []string{
 		"models.UserFields()",
 		"reports.SummaryFieldsAt(scope)", "UserDraft{}", "models.QueryUsers()",
@@ -29,12 +29,12 @@ func TestCurrentModelGuideRejectsRetiredTeaching(t *testing.T) {
 func TestRepositoryRetainsRetirementRulesWithoutMigrationLink(t *testing.T) {
 	for _, test := range []struct{ text, wantError string }{
 		{"Current API without a migration link.", ""},
-		{"Use `query.Users`.\n[Migration](orm-migration.md)", "retired API outside a migration before block"},
-		{"Use `models.Users.Query()`.\n[Migration](orm-migration.md)", ""},
+		{"Use `query.Users`.\n[Migration](model-declarations.md)", "retired API in teaching"},
+		{"Use `models.Users.Query()`.\n[Migration](model-declarations.md)", ""},
 	} {
 		root := testRepository(t)
 		writeTestFile(t, root, "docs/guides/model-queries.md", test.text)
-		writeTestFile(t, root, "docs/guides/orm-migration.md", "# Migration\n")
+		writeTestFile(t, root, "docs/guides/model-declarations.md", "# Migration\n")
 		err := checkRepository(root)
 		if test.wantError == "" && err != nil || test.wantError != "" && (err == nil || !strings.Contains(err.Error(), test.wantError)) {
 			t.Fatalf("want %q for %q, got %v", test.wantError, test.text, err)
@@ -99,9 +99,16 @@ func TestRepositoryChecksModelDeclarationTeaching(t *testing.T) {
 	}
 }
 
-func TestMigrationRetainsHistoricalGeneratedExamples(t *testing.T) {
+func TestHistoricalLabelCannotExemptGeneratedExamples(t *testing.T) {
 	doc := "<!-- orm-example: inputs-before -->\n```go\nreturn oldmutators.MemberDraft{}.SetEmail(input)\n```\n"
-	if err := checkModelGuide("docs/guides/orm-migration.md", []byte(doc)); err != nil {
-		t.Fatal(err)
+	if err := checkModelGuide("docs/guides/model-declarations.md", []byte(doc)); err == nil {
+		t.Fatal("historical label exempted generated examples")
+	}
+}
+
+func TestRetiredGeneratedModelDiagnosticKeepsLine(t *testing.T) {
+	err := checkModelGuide("guide.md", []byte("# Guide\n\nText.\n\nUse models.UserFields().\n"))
+	if err == nil || !strings.Contains(err.Error(), "guide.md:5: guide teaches a retired generated model/query API; declare models with //foundry:model") {
+		t.Fatalf("lost located repair: %v", err)
 	}
 }

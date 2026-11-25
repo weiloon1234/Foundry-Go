@@ -48,7 +48,7 @@ declarations, lifecycle and hydration; [shared execution](../internal/ormcore) o
 bounded delivery, cancellation and callback isolation. No alternate query engine
 or generated model decoder remains.
 
-The [migration guide](../docs/guides/orm-migration.md) links compiled native examples.
+The [migration guide](https://github.com/weiloon1234/Foundry-Go/blob/7b364318/docs/guides/orm-migration.md) links compiled native examples.
 The [transfer ledger](../docs/evidence/goway-stage8d3a-transfers.json) maps historical
 assertions to executable native/shared tests. Independent fixtures retain SQL,
 bindings, hydration, compiler negatives, footprint ceilings and frozen historical

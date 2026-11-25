@@ -2,7 +2,7 @@
 
 Typed session/token revocation and checked password-proof issuance share the caller's model transaction and preserve guard/provider ownership.
 
-Milestone 10 passed native acceptance. See the [master roadmap](../../blueprint/00-master-architecture-and-parity.md#milestone-10-acceptance) for verification evidence and later integration boundaries.
+Milestone 10 passed native acceptance. See the master roadmap for verification evidence and later integration boundaries.
 
 ## Register the credential guards once for invalidation
 

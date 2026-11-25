@@ -49,7 +49,7 @@ call; the focused editor checks and final full gate passed without changing the
 runtime or weakening the expected completions.
 
 Final source review retained the existing HTTP authentication owner and one shared
-pagination completion path. The [evidence record](../evidence/authenticated-pagination-20260928.json)
+pagination completion path. The evidence record
 contains commands, results, source fingerprints and this correction.
 
 ## Starter handoff

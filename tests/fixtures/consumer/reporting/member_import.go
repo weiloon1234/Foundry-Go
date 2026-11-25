@@ -34,4 +34,6 @@ func memberImports() importer.Definition[MemberImport] {
 		},
 		Rules: []validation.Rule[MemberImport]{validation.Rules(name, validation.NonBlank[string](), validation.MaxLength[string](80))},
 	})
-} // doc-example:end datatable-5
+}
+
+// doc-example:end datatable-5

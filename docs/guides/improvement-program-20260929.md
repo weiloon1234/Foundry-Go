@@ -9,7 +9,7 @@ not diagnosable, small fail-fast capacity limits turned bursts into 500s, bounde
 stores counted dead data and were never pruned, transient infrastructure errors
 became permanent or fatal, and several hot paths made avoidable round trips. This
 program fixed every confirmed defect, added measured performance work and closed
-the main parity gaps. The [changelog](../../CHANGELOG.md) lists each change by area
+the main parity gaps. The changelog lists each change by area
 and the [compatibility policy](../compatibility.md) records the rollout rules.
 
 ## Delivered work by area
@@ -33,7 +33,7 @@ and the [compatibility policy](../compatibility.md) records the rollout rules.
 These items were reviewed and deliberately left for later work:
 
 - Token-family impersonation (sessions are supported), Dart clients and the other
-  roadmap items in [deferred extensions](../../blueprint/25-deferred-extensions.md).
+  roadmap items in deferred extensions.
 - A cache failover store (tag and namespace versions differ between backends) and
   typed Redis pattern subscriptions.
 - Autocommit for model patches/deletes (inserts only), and skipping the pre-hook

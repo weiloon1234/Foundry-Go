@@ -2,7 +2,7 @@
 
 Status: implemented and accepted on 2026-09-26. See the
 [usage guide](validation-messages.md) and
-[current-source acceptance evidence](../evidence/validation-messages-20260926.json).
+current-source acceptance evidence.
 The design below is retained as the implemented acceptance scope.
 
 ## Intended experience

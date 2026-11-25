@@ -4,7 +4,7 @@ This review follows the current Foundry-Go source and public consumer contracts.
 
 ## Current status
 
-The review is complete for all 65 current module families, including generation, CLI, testing and release tooling. All 18 findings are fixed. The complete native gate, required PostgreSQL/Redis integration, affected races, consumer/compiler/editor/TypeScript acceptance, deterministic generation and nine fuzz targets passed. The post-verification audit found and fixed additional outbox/scheduler lifecycle paths, followed by focused races and another complete native gate. Fresh private packages, build/editor measurements and dependency/security review also passed. The [acceptance record](../evidence/module-review-20260923.json) retains source fingerprints, coverage, commands, results and limitations.
+The review is complete for all 65 current module families, including generation, CLI, testing and release tooling. All 18 findings are fixed. The complete native gate, required PostgreSQL/Redis integration, affected races, consumer/compiler/editor/TypeScript acceptance, deterministic generation and nine fuzz targets passed. The post-verification audit found and fixed additional outbox/scheduler lifecycle paths, followed by focused races and another complete native gate. Fresh private packages, build/editor measurements and dependency/security review also passed. The acceptance record retains source fingerprints, coverage, commands, results and limitations.
 
 ## Findings
 

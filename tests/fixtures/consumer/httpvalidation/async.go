@@ -21,7 +21,9 @@ func AsyncRouter(service httpendpoints.Service, lookup validation.Lookup[string]
 		validation.Rules(fields.Nickname, validation.Optional(validation.Nullable(validation.Lowercase[string]()))),
 	))
 	return foundryhttp.NewRouter(endpoint.Handle(service.Update))
-} // doc-example:end validation-expanded-async-router
+}
+
+// doc-example:end validation-expanded-async-router
 
 // OwnEmailRouter is declared once. The trusted route key of the user being
 // updated is provided per request through a validation slot, so the lookup

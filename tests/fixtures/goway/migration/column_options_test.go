@@ -7,7 +7,7 @@ import (
 	"github.com/weiloon1234/Foundry-Go/validation"
 )
 
-// migration:column-options-v030
+// doc-example:begin column-options-v030
 func usernameColumn() datatable.ColumnRegistration[Admin, AdminRow] {
 	text := foundryhttp.StringQuery[string]()
 	field := validation.DefineBinding("username", func(row *AdminRow) *string { return &row.Username })
@@ -20,4 +20,4 @@ func usernameColumn() datatable.ColumnRegistration[Admin, AdminRow] {
 	)
 }
 
-// migration:end
+// doc-example:end column-options-v030

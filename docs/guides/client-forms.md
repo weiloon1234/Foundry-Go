@@ -217,35 +217,40 @@ binder's label function receives `FieldMessageKey`, the union of the label and
 help keys that request fields of the entry declare; when one has no catalog
 text, the application's `fieldLabel` line fails to compile and names the key.
 
-## In a React form
+## Supply the form state
 
-An application makes one hook per client entry with its catalog-typed
-translator, which holds the form's state and commits each shown render in a
-layout effect. Each form calls it once per render, directly in the form
-component's body, passing every operation it submits:
+`fieldBinder` takes a label function and a state provider. Keep one state per form
+instance and commit the bindings when the form publishes them. Bind all operations
+submitted by the same form in one call. This recipe shows separate single-operation
+and two-operation form instances; its label function returns the message key.
 
-```tsx
-// portals/admin/src/forms.ts: the one typed seam per portal
-export const fieldLabel = (key: FieldMessageKey): string => t(key);
-function useFormFieldState(): FormFieldState {
-  const [state] = useState(formFieldState);
-  useLayoutEffect(() => commitFormFields(state));
-  return state;
+[Compiled excerpt, imports and enclosing context](../../tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts):
+
+<!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts#form-state-provider -->
+```typescript
+export function bindFormOperations(issues: readonly sdk.Issue[]) {
+  type Draft = Required<Pick<sdk.FormValues<sdk.Operations["itemsEcho"]["request"]["body"]>, "amount">>;
+  const label = (key: sdk.FieldMessageKey): string => key;
+  let values: Draft = { amount: "0" };
+  const update: sdk.FormUpdate<Draft> = (next) => { values = next(values); };
+
+  const singleState = sdk.formFieldState();
+  const singleFields = sdk.fieldBinder(label, () => singleState);
+  const single = singleFields(sdk.operation("itemsEcho"), values, update, issues);
+  sdk.commitFormFields(singleState);
+
+  const combinedState = sdk.formFieldState();
+  const combinedFields = sdk.fieldBinder(label, () => combinedState);
+  const [items, generic] = combinedFields(
+    [sdk.operation("itemsEcho"), sdk.operation("genericEcho")], values, update, issues,
+  );
+  sdk.commitFormFields(combinedState);
+  return { single, items, generic };
 }
-export const useFields = fieldBinder(fieldLabel, useFormFieldState);
-
-// a form
-const create = operation("adminAccountsCreate");
-const [draft, setDraft] = useState({ username: "", password: "" });
-const f = useFields(create, draft, setDraft, feedback.issues);
-<Input field={f.username} autoComplete="off" />
-<Input field={f.password} autoComplete="new-password" />
-
-// a form that creates or updates: one call, one state
-const [created, updated] = useFields([create, update], draft, setDraft, feedback.issues);
-const g = current ? updated : created;
-<Input field={g.username} autoComplete="off" />
 ```
+
+An application wraps the state provider in its UI library's hook and supplies its
+translator. Starter's `web/shared/forms` owns this wrapper for React.
 
 Build each request body with exactly its fields, as a fresh object literal
 typed as the request (or, for a PATCH, an object of the request's type assigned

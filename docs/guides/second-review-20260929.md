@@ -6,7 +6,7 @@ was deliberately bounded to authentication, transaction retry, outbox/jobs,
 generated contracts and dependency consumption. Here, eight read-only reviewers
 re-examined every changed area, then the implementers that own each area fixed
 the confirmed defects with regression tests. The per-area "Fixed" sections of the
-[changelog](../../CHANGELOG.md) list every correction; rollout rules remain in
+changelog list every correction; rollout rules remain in
 [compatibility](../compatibility.md).
 
 ## Stabilization corrections confirmed

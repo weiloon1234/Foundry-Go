@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- Documentation uses one compiled-source marker with standalone source regions.
+  Every Go, TypeScript and TSX block in guides, instructions and skills requires
+  a binding; repeated inclusion of the same source region is allowed. Every fence
+  requires a supported language tag; indented and HTML code blocks are refused.
+  Text and Markdown receive best-effort code checks, including nested executable
+  fences. Regions cannot start or finish with a bare comment separator.
+- Removed the ORM migration guide and historical teaching exemptions. Current
+  examples live in task guides; the ledger records documented replacements and
+  diagnostics report them, or state that none is recorded.
+- Client guides use compiled, framework-neutral TypeScript examples. UI hooks
+  remain application-owned, and the framework adds no React or TSX dependency.
+
 ## v0.52.0 — 2026-11-25
 
 - Telemetry kernel selection now controls shutdown persistence: ordinary console
@@ -346,7 +360,7 @@ JSON property of the field it addresses, and `datatable.Define` rejects a
 mismatch. There are no compatibility aliases. This is a source compatibility
 change; SQL text, persisted data, wire formats and the deployment protocol do not
 change. Convert every table before updating the pin; the
-[migration guide](docs/guides/orm-migration.md#datatable-columns-and-sources)
+[migration guide](https://github.com/weiloon1234/Foundry-Go/blob/7b364318/docs/guides/orm-migration.md#datatable-columns-and-sources)
 lists each step.
 
 ```go
@@ -426,7 +440,7 @@ and the `*Expr` adapters are removed: 262 functions and 36 adapter or interface
 types leave `database/orm`. There are no compatibility aliases. This is a source
 compatibility change; SQL text, persisted data, wire formats and the deployment
 protocol do not change. Convert every call site before updating the pin; the
-[migration guide](docs/guides/orm-migration.md#unified-orm-column-handles-and-operators)
+[migration guide](https://github.com/weiloon1234/Foundry-Go/blob/7b364318/docs/guides/orm-migration.md#unified-orm-column-handles-and-operators)
 lists each family.
 
 ```go
@@ -2793,7 +2807,7 @@ The first immutable client contract cohort is `contracts-v0.3.0`.
   `ColumnOption[S, V]` and returns `ColumnRegistration[S, R]` directly;
   `Searchable(row)` and `ExportAs(selected, cell)` infer both types.
   Public DSL operations are visible in `go doc`; see the
-  [v0.3 migration table](docs/guides/orm-migration.md#v030-expression-and-datatable-migration).
+  [v0.3 migration table](https://github.com/weiloon1234/Foundry-Go/blob/7b364318/docs/guides/orm-migration.md#v030-expression-and-datatable-migration).
 - Fixed: TypeScript datatable enum columns reference the S1 enum value object for cases and labels instead of duplicating cases as strings. Numeric enum columns now compile with number cases up to 32 bits and decimal strings for wider integers, including enums without registered label metadata.
 
 - Changed (breaking): `Codec.CloneOptional` → `codec.CloneOptional`. Pass the codec as the first argument; the method is removed.
@@ -2892,7 +2906,7 @@ The first immutable client contract cohort is `contracts-v0.3.0`.
 ## v0.1.0 — 2026-10-27
 
 **Highlights:** The native typed ORM replaces generated models and `database/query`.
-This is a breaking change; see the [migration guide](docs/guides/orm-migration.md).
+This is a breaking change; see the [migration guide](https://github.com/weiloon1234/Foundry-Go/blob/7b364318/docs/guides/orm-migration.md).
 Against the previous main, the 70-model app measured a 72% faster cold build, 76%
 less cache and 78% smaller archives; reads were 11–57% faster with fewer allocations.
 See the [Stage 11 release-candidate measurements](docs/evidence/goway-stage11-measurements.md#final-release-candidate-30578f82).
@@ -2923,7 +2937,7 @@ strict no-slower target is not established. See the [Stage 11 report](docs/evide
   generator directives. Handwrite `database/orm` declarations and `orm/rows`
   projections; DTO, enum, validation, configuration and transport generation remain.
 - Remove `database/query`, all data-layer legacy bridges and compatibility aliases.
-  The [migration table](docs/guides/orm-migration.md#removed-api-spellings) lists every
+  The [migration table](https://github.com/weiloon1234/Foundry-Go/blob/7b364318/docs/guides/orm-migration.md#removed-api-spellings) lists every
   denied spelling and the native replacement. The retirement guard has no allowlist.
 - Remove `Predicate.Not`, `rows.Count`, `RecordRead.All`, `SetQuery.All`,
   `ValueSetQuery.All`, `ValueCursorQuery.Key`, `expr.Select` for row values,
@@ -3025,7 +3039,7 @@ breaking-change summary above supersedes their coexistence and pending-retiremen
 - Complete the Stage 9 compiler catalogue (587 ported, 445 unaffected, zero pending)
   and begin the generated-consumer cleanup barrier. Add the reviewed oracle freeze
   harness; freezing and remaining legacy retirement are still pending.
-- Publish the [ORM migration guide](docs/guides/orm-migration.md) with compiled
+- Publish the [ORM migration guide](https://github.com/weiloon1234/Foundry-Go/blob/7b364318/docs/guides/orm-migration.md) with compiled
   examples and [breaking changes](docs/evidence/goway-breaking-changes.md): explicit
   declarations/roles, typed assignments instead of drafts, explicit soft-delete
   capabilities, lifecycle observers and reconciliation-aware write outcomes.

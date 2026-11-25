@@ -6,7 +6,7 @@ import (
 )
 
 // doc-example:begin presence-input-rules
-//
+
 //foundry:dto http=body
 type PresenceInput struct {
 	Label     value.Optional[string]                 `json:"label,omitzero"`
@@ -27,7 +27,9 @@ func PresenceRules() validation.Rule[PresenceInput] {
 		validation.Rules(fields.Forbidden, validation.ProhibitedNullable[string]()),
 		validation.Rules(fields.Tags, validation.Required(validation.Each[[]string](validation.NonBlank[string]()))),
 	)
-} // doc-example:end presence-input-rules
+}
+
+// doc-example:end presence-input-rules
 
 // Any supplied, nonempty trigger requires a label. Zero and false activate the
 // rule, whereas an omitted trigger does not. All references are generated fields.

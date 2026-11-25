@@ -10,7 +10,6 @@ import (
 	"github.com/weiloon1234/Foundry-Go/value"
 )
 
-// guide:scaffold-roles
 // doc-example:begin model-scaffolding-name-input
 type NameInput struct{ Text string }
 
@@ -48,11 +47,10 @@ var Widgets = orm.Define("widgets", func(b orm.Builder[Widget], m *Widget) Widge
 		Soft:      orm.SoftDeletes(deleted),
 		Children:  orm.ManyOf(b, &m.Children),
 	}
-}) // doc-example:end model-scaffolding-name-input
+})
 
-// guide:end
+// doc-example:end model-scaffolding-name-input
 
-// guide:scaffold-relations
 // doc-example:begin model-scaffolding-child
 type Child struct {
 	ID       model.ID[Child]
@@ -74,6 +72,6 @@ func ChildTables() []orm.CheckedTable  { return []orm.CheckedTable{Children} }
 
 func Tables() []orm.CheckedTable {
 	return append(WidgetTables(), ChildTables()...)
-} // doc-example:end model-scaffolding-child
+}
 
-// guide:end
+// doc-example:end model-scaffolding-child

@@ -30,7 +30,8 @@ func checkCorrelatedQueries(t *testing.T, tx *database.Tx, users []models.User) 
 	order := rowset.InnerScope(link, rowset.ModelScope(models.Orders.Query()))
 	matched := link.Where(expr.Equal(expr.At(order, models.Orders.BuyerID), expr.At(buyer, models.Users.ID)))
 	counts := rowset.SelectCorrelatedScalar(matched, expr.AsSelected(expr.CountFieldAt(order, models.Orders.ID)))
-	totals := rowset.SelectCorrelatedScalar(matched, expr.AsSelected(expr.SumAt(order, models.Orders.TotalCents))) // doc-example:end model-correlations
+	totals := rowset.SelectCorrelatedScalar(matched, expr.AsSelected(expr.SumAt(order, models.Orders.TotalCents)))
+	// doc-example:end model-correlations
 	// doc-example:begin embed-correlated-scalar
 	r := reports.UserOrderStatsRows
 	report := rowset.OrderBy(rowset.Select(rowset.From(models.Users.Query()), r.Row,

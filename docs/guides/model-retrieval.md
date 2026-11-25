@@ -2,7 +2,7 @@
 
 `orm.RetrievalHooks[M]` dispatches `Retrieved` after complete-model hydration and row closure. It is separate from write hooks and explicit accessors. It does not replace stored fields with presentation values.
 
-<!-- orm-example: retrieved-after -->
+<!-- compiled-source: tests/fixtures/goway/migration/examples_test.go#retrieved-after -->
 ```go
 func retrieval() orm.RetrievalHooks[reads.Member] {
 	return orm.RetrievalHooks[reads.Member]{Retrieved: func(context.Context, database.Executor, reads.Member) error { return nil }}

@@ -15,7 +15,7 @@ the named client's header budget. See [observability](observability.md); the
 milestone 24 verification passed as recorded in [production acceptance](../production-acceptance.md).
 
 Milestone 20 passed native verification and consumer review. The
-[master evidence](../../blueprint/00-master-architecture-and-parity.md#milestone-20-verification-and-consumer-review)
+master evidence
 records the checks and operational limits.
 
 <a id="recipe-named-http-client"></a>

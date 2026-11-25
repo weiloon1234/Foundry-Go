@@ -1539,7 +1539,7 @@ matching random hostname. It never resets the zone. The container feature scenar
 also invokes `tests/acceptance_dns.py` against the controlled loopback provider.
 Ordinary application rehearsal continues to use external local DNS.
 
-The [Managed DNS live certification](../evidence/v037-managed-dns-live-certification.md)
+The Managed DNS live certification
 records the 2026-11-15 test-zone results and reproduction command.
 ### Select and inspect numbered copies
 
@@ -1792,7 +1792,7 @@ Without the opt-in, rehearsal refuses any bound disk that declares multipart
 conditions before creating containers. The error names the disk, the listing
 conformance gap, and the exact opt-in to add. A future stand-in upgrade must pass
 the certification before the opt-in can be removed. See the
-[stand-in certification evidence and command](../evidence/v036-rehearsal-conditional-multipart.md).
+stand-in certification evidence and command.
 
 To accept reduced fidelity for specific disks, add this optional field to the
 private rehearsal binding file:

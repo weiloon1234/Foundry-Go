@@ -63,7 +63,8 @@ func TestPostgresIntervalCalculations(t *testing.T) {
 			if got.Sub(samples[0].Start) != test.hours*time.Hour {
 				t.Fatal(got, test.hours)
 			}
-		} // doc-example:end interval-queries-2
+		}
+		// doc-example:end interval-queries-2
 		early, err := temporal.ParseLocalDateTime("0001-01-01T00:00:00")
 		if err != nil {
 			return err

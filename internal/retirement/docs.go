@@ -16,17 +16,7 @@ var codeSpan = regexp.MustCompile("`+([^`]+)`+")
 var proseSelector = regexp.MustCompile(`[A-Za-z_][A-Za-z_0-9]*(\(\))?(\.[A-Za-z_][A-Za-z_0-9]*(\(\))?)+`)
 var jsxElement = regexp.MustCompile(`</?[A-Za-z_$][A-Za-z_0-9$]*(\.[A-Za-z_$][A-Za-z_0-9$]*)*([ \t\r\n]+([A-Za-z_{]([^<>"']|"[^"]*"|'[^']*')*)?)?/?>`)
 
-var beforeMarker = regexp.MustCompile(`^<!-- orm-example: [a-z0-9-]+-before -->$`)
-var textBlockBoundary = regexp.MustCompile(`^(#{1,6}([ \t]|$)|>|<|[-=_*]{3,}[ \t]*$)`)
-var listItemStart = regexp.MustCompile(`^([-+*][ \t]|[0-9]+[.)][ \t])`)
-
-// CheckDocument rejects retired spellings in active documentation. Only labelled
-// before blocks in the designated migration guides describe the removed API.
-// A label covers the immediately following fence, table, or paragraph (including
-// one list item), never a heading or an entire section.
-// Unqualified top-level names in code must use a retained, qualified spelling.
-// Unqualified member spellings also require their retained owner where a type
-// name is shared (for example orm.Query.OrderBy).
+// CheckDocument rejects retired spellings in active documentation without historical exemptions.
 func CheckDocument(name string, data []byte) error {
 	return checkDocument(name, data, true)
 }
@@ -76,30 +66,20 @@ func checkDocument(name string, data []byte, strict bool) error {
 		}
 	}
 	var failures []error
-	pending, before := false, false
-	textBefore, tableBefore := false, false
 	fence, language := "", ""
 	var code []string
 	codeLine := 0
 	checkCode := func() {
-		if !before && !javascriptFence(language) {
+		if !javascriptFence(language) {
 			text := withoutJSXElements(strings.Join(code, "\n"))
 			failures = append(failures, rules.checkCode(name, text, codeLine, !strict)...)
-			if (language == "" || language == "go" || language == "golang") && retiredCodeName(text, unqualified) {
-				failures = append(failures, safeerror.New(fmt.Sprintf("%s:%d: unqualified retired API in Go block; use its retained qualified owner", name, codeLine)))
+			if spelling, relativeLine := retiredCodeName(text, unqualified); (language == "" || language == "go" || language == "golang") && spelling != "" {
+				failures = append(failures, safeerror.New(fmt.Sprintf("%s:%d: %s", name, codeLine+relativeLine-1, rules.retirementMessage(spelling))))
 			}
 		}
 	}
 	for i, line := range strings.Split(string(data), "\n") {
 		trimmed := strings.TrimSpace(line)
-		if fence == "" && beforeMarker.MatchString(trimmed) {
-			pending = name == "docs/guides/orm-migration.md"
-			textBefore = false
-			if !pending {
-				failures = append(failures, safeerror.New(fmt.Sprintf("%s:%d: migration before labels are allowed only in designated migration guides", name, i+1)))
-			}
-			continue
-		}
 		if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
 			n := 0
 			for n < len(trimmed) && trimmed[n] == trimmed[0] {
@@ -111,33 +91,14 @@ func checkDocument(name string, data []byte, strict bool) error {
 				code = nil
 				codeLine = i + 2
 				language = strings.TrimSpace(strings.TrimLeft(trimmed, string(marker[0])))
-				before = pending
-				pending = false
-				textBefore = false
 				continue
 			} else if fence != "" && fence[0] == marker[0] && len(marker) >= len(fence) && strings.TrimSpace(trimmed[n:]) == "" {
 				checkCode()
 				fence = ""
-				before = false
 				continue
 			}
 		}
-		if before {
-			continue
-		}
 		if fence != "" && javascriptFence(language) {
-			continue
-		}
-		if fence == "" {
-			if pending {
-				textBefore = trimmed != "" && !textBlockBoundary.MatchString(trimmed)
-				tableBefore = strings.HasPrefix(trimmed, "|")
-			} else if textBefore {
-				textBefore = trimmed != "" && !textBlockBoundary.MatchString(trimmed) && !listItemStart.MatchString(trimmed) && tableBefore == strings.HasPrefix(trimmed, "|")
-			}
-		}
-		pending = false
-		if fence == "" && textBefore {
 			continue
 		}
 		for pattern, replacement := range commands {
@@ -145,14 +106,16 @@ func checkDocument(name string, data []byte, strict bool) error {
 				failures = append(failures, safeerror.New(fmt.Sprintf("%s:%d: retired command; %s", name, i+1, replacement)))
 			}
 		}
-		bad := false
+		bad := ""
 		if fence != "" {
 			code = append(code, line)
 		}
 		line = withoutJSXElements(line)
 		if fence == "" {
 			for _, span := range codeSpan.FindAllStringSubmatch(line, -1) {
-				bad = bad || retiredCodeName(span[1], unqualified)
+				if bad == "" {
+					bad, _ = retiredCodeName(span[1], unqualified)
+				}
 				failures = append(failures, rules.checkCode(name, span[1], i+1, !strict)...)
 			}
 			prose := codeSpan.ReplaceAllString(line, "")
@@ -160,13 +123,17 @@ func checkDocument(name string, data []byte, strict bool) error {
 				failures = append(failures, rules.checkCode(name, selector, i+1, !strict)...)
 			}
 		}
-		if bad {
-			failures = append(failures, safeerror.New(fmt.Sprintf("%s:%d: unqualified retired API in code; use its retained qualified owner", name, i+1)))
+		if bad != "" {
+			failures = append(failures, safeerror.New(fmt.Sprintf("%s:%d: %s", name, i+1, rules.retirementMessage(bad))))
 			continue
 		}
 		for _, pattern := range patterns {
-			if pattern.MatchString(line) {
-				failures = append(failures, safeerror.New(fmt.Sprintf("%s:%d: retired API outside a migration before block", name, i+1)))
+			if spelling := pattern.FindString(line); spelling != "" {
+				message := "retired API in teaching; no replacement is recorded for this spelling; remove it and consult the current task guide."
+				if _, exists := rules.replacements[retirementName(spelling)]; exists {
+					message = rules.retirementMessage(spelling)
+				}
+				failures = append(failures, safeerror.New(fmt.Sprintf("%s:%d: %s", name, i+1, message)))
 				break
 			}
 		}
@@ -216,21 +183,22 @@ func withoutJSXElements(text string) string {
 
 // Scan code rather than prose or string contents. A selector rooted at another
 // package/type is not an unqualified reference to a removed package declaration.
-func retiredCodeName(code string, denied map[string]bool) bool {
+func retiredCodeName(code string, denied map[string]bool) (string, int) {
 	var scan scanner.Scanner
 	fs := token.NewFileSet()
 	scan.Init(fs.AddFile("", -1, len(code)), []byte(code), func(token.Position, string) {}, 0)
 	type lexeme struct {
 		kind token.Token
 		name string
+		line int
 	}
 	var tokens []lexeme
 	for {
-		_, kind, literal := scan.Scan()
+		pos, kind, literal := scan.Scan()
 		if kind == token.EOF {
 			break
 		}
-		tokens = append(tokens, lexeme{kind, literal})
+		tokens = append(tokens, lexeme{kind, literal, fs.Position(pos).Line})
 	}
 	brackets := 0
 	for i, item := range tokens {
@@ -285,13 +253,13 @@ func retiredCodeName(code string, denied map[string]bool) bool {
 		}
 		reference := brackets == 0 && previous != token.IDENT && previous != token.RPAREN && next != token.IDENT && next != token.PERIOD && next != token.COLON && next != token.LSS
 		if qualifier == "" && denied[item.name] && (bare || call || assigned || reference) {
-			return true
+			return item.name, item.line
 		}
 		if end+1 < len(tokens) && tokens[end].kind == token.PERIOD && tokens[end+1].kind == token.IDENT && denied[qualifier+item.name+"."+tokens[end+1].name] {
-			return true
+			return qualifier + item.name + "." + tokens[end+1].name, item.line
 		}
 	}
-	return false
+	return "", 0
 }
 
 // declaredFunctionName reports whether the identifier after prefix is the name

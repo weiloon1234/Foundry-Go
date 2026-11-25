@@ -4,7 +4,7 @@
 
 ## Find first or create
 
-<!-- orm-example: first-or-create-user -->
+<!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#first-or-create-user -->
 ```go
 func firstOrCreateUser(ctx context.Context, tx *database.Tx) (models.User, error) {
 	f := models.Users
@@ -21,7 +21,7 @@ After creation, the stored identity must satisfy the original predicates and vis
 
 ## Create first or update an existing model
 
-<!-- orm-example: lookup-branches -->
+<!-- compiled-source: tests/fixtures/goway/migration/lifecycle_test.go#lookup-branches -->
 ```go
 func createOrFindUser(ctx context.Context, tx *database.Tx) (models.User, error) {
 	f := models.Users

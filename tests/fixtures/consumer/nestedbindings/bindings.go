@@ -41,13 +41,17 @@ func ProjectBySlug(db database.Executor) modelbinding.Resolver[Path, Project] {
 func Projects(db database.Executor) modelbinding.Resolver[Path, TeamProject] {
 	teams := modelbinding.ByKey(db, orm.Keyed(TeamRecords.Query(), TeamRecords.Key()), func(path Path) model.ID[Team] { return path.Team })
 	return modelbinding.ThroughRelation(db, teams, TeamLinks.Projects.Where(orm.Eq(ProjectRecords.Enabled, true)), ProjectRecords.Slug, func(path Path) Slug { return path.Project })
-} // doc-example:end scoped-model-binding-projects
+}
+
+// doc-example:end scoped-model-binding-projects
 // doc-example:begin scoped-model-binding-resolve
 func Resolve(db database.Executor) modelbinding.Resolver[Path, Resources] {
 	teamsEndpoint := Projects(db)
 
 	return modelbinding.ThroughSelectedRelation(db, teamsEndpoint, func(previous TeamProject) Project { return previous.Child }, ProjectLinks.Tasks, TaskRecords.Slug, func(path Path) Slug { return path.Task })
-} // doc-example:end scoped-model-binding-resolve
+}
+
+// doc-example:end scoped-model-binding-resolve
 func Handle(_ context.Context, input Request) (Reply, error) {
 	return Reply{Team: input.Model.Parent.Parent.Name, Project: input.Model.Parent.Child.Slug, Task: input.Model.Child.Slug}, nil
 }

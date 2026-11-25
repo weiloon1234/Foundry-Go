@@ -43,10 +43,8 @@ hyphens and are unique within their file. Regions cannot nest or overlap. A boun
 must be an actual line comment in its source language. Marker-looking text inside
 quoted or template literal text, Go raw strings, or block comments is rejected,
 even when the enclosing file is a compiler input. A boundary
-marker may follow its first or last code line as a trailing comment; its separating
-spaces or tabs belong to the marker. Put a blank line between a standalone marker
-and a Go declaration directive such as `//foundry:dto` so gofmt keeps their comment
-groups separate. Add the same separation before an end marker when needed.
+marker must stand alone. Put a blank line between a marker and a Go declaration
+directive such as `//foundry:dto` so gofmt keeps their comment groups separate.
 
 The guide names that region immediately before its fence:
 
@@ -71,20 +69,34 @@ blank lines, then removes the longest byte-identical space/tab prefix shared by
 nonblank lines. Interior blank lines remain and lose at most that prefix. Whole-file
 inclusions retain their boundary blank lines. All other source lines and whitespace
 remain intact. Render and read-only `--check` use these same rules.
+A named region cannot begin or end with a bare `//` separator: move the marker
+outside the comment group, or include the whole comment.
 It derives `go` or `typescript` from
 the extension and uses a backtick delimiter longer than any run in the excerpt.
 It adds the newline needed to close a fence when a whole source file lacks one.
 It never renames symbols, repairs calls or inserts ellipses.
 
-Each region has one owning inclusion. Link to that owner from other sections.
-Every Go or TypeScript fence inside a `recipe-*` section, including subsections,
-requires a directive until the next heading of the same or higher level. The
-previously complete guides also retain their whole-guide source-binding rule.
-The coverage list lives in `internal/docsource`, replacing both old fixture
-substring checkers. The former `go-source` and `compiled-examples` markers are
-rejected. Current guides and instructions teach `//foundry:model`; `checkdocs`
-rejects Go examples that handwrite model tables, bindings or identity blocks.
-The projection directive and former query/draft APIs remain retired.
+A region may appear in several documents. Every Go, TypeScript or TSX fence in
+a guide, an `AGENTS.md`, or `.claude/skills` Markdown requires the same binding.
+The canonical fence tags are `go`, `typescript` and `tsx`. The framework source
+reader accepts Go and TypeScript fixture files only; TSX has no framework host.
+Every fenced block must declare exactly one supported tag: `go`, `typescript`,
+`tsx`, `sh`, `toml`, `json`, `sql`, `text`, `ini`, `markdown`, `yaml` or `makefile`.
+The closed list belongs to `internal/docsource`. Untagged fences, unknown tags,
+attributes, indented code and HTML code blocks fail. Quotes and lists do not
+exempt a block. The tag is the contract: code detection inside `text` and
+`markdown` fences is best effort, including nonempty nested Go or TypeScript
+fences. The other data and command tags remain a declared contract, without
+content detection. Use `text` only for output and plain text; bind executable
+examples to compiled source. There are
+no per-document exceptions or directory-name exclusions inside teaching roots,
+and those roots cannot contain symlinks.
+
+`renderdocs --check` checks source equality. `checkdocs`, including its
+`--go-inputs` mode, additionally reports every unbound block. Historical records in `docs/evidence`, blueprints and the changelog
+are outside code-block coverage and cannot be guide or skill link targets.
+Current guides and instructions teach `//foundry:model`; `checkdocs` rejects Go
+examples that handwrite model tables, bindings or identity blocks.
 
 A low-level generated-code or test reference can label one example with
 `<!-- model-declaration-reference -->`, immediately before its `compiled-source`
@@ -123,18 +135,15 @@ Rendered guides ship as readable Markdown. Source links name files in the matchi
 GitHub source tree; nested fixture modules need not exist in the installed module
 cache. Reading a released recipe needs no compiler or renderer.
 
-### Former API teaching in migration guides
+### Current API teaching
 
-Only `orm-migration.md` may teach removed APIs. Use the
-existing `<!-- orm-example: name-before -->` label immediately before one fence,
-pipe-delimited mapping table, or paragraph (including one list item). A fence
-ends at its closing delimiter; a table ends at its last row. A paragraph ends at
-a blank line or a new block, including the next list item. A label does not
-cover headings or whole sections. Label each former-API block separately.
-
-Active guides and application instructions cannot use this exception. Link to
-the migration owner instead of repeating former methods in current API teaching.
-Current validation functions belong in the [validation guide](validation.md#descriptor-functions).
+Guides teach only the current API. The retired-name ledger in
+[`internal/retirement/denied.json`](../../internal/retirement/denied.json) records
+retired names and optional replacement text in the same entries. The retired-names
+ledger gives the replacement when one was documented; diagnostics print that text
+or say that no replacement is recorded. Its replacement package names are checked
+against current declarations. Historical labels
+do not exempt a fence, table or paragraph from retirement checks.
 
 <a id="recipe-reference-guides"></a>
 ## Reference pinned guides
@@ -143,7 +152,7 @@ Declare references on complete lines outside Markdown fences:
 
 ```markdown
 Foundry guides: `http-endpoints`, `developer-tooling-and-testing#pinned-documentation-checks`
-Foundry guides: `orm-migration`
+Foundry guides: `model-declarations`
 ```
 
 Each line contains one or more backtick tokens, separated by commas. A token is

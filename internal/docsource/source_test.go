@@ -2,6 +2,7 @@ package docsource
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,7 +26,7 @@ func TestAgentNavigationLines(t *testing.T) {
 func TestRecipeAnchorRequiresHeading(t *testing.T) {
 	for _, tail := range []string{"<!-- explanation -->\n## Read", "Some prose\n## Read", "<a id=\"recipe-other\"></a>\n## Read", "<a id=\"other\"></a>\n## Read", "Read\n----", ""} {
 		_, err := parseDocument("guide.md", []byte("<a id=\"recipe-read\"></a>\n"+tail), nil)
-		if err == nil || !strings.Contains(err.Error(), "must be followed by one ATX heading") {
+		if err == nil || !strings.Contains(err.Error(), "must be followed by a # heading") {
 			t.Fatalf("displaced anchor %q: %v", tail, err)
 		}
 	}
@@ -76,7 +77,7 @@ func TestLiteralMarkersCannotClaimCompilerProof(t *testing.T) {
 
 func TestSourceCommentContexts(t *testing.T) {
 	for _, language := range []string{"go", "typescript"} {
-		text := "const value = \"/* not a comment */\"\n// doc-example:begin value\nvar result = value // doc-example:end value\n"
+		text := "const value = \"/* not a comment */\"\n// doc-example:begin value\nvar result = value\n// doc-example:end value\n"
 		if _, err := parseSource(text, language); err != nil {
 			t.Fatal(err)
 		}
@@ -136,7 +137,7 @@ func TestWholeFileRetainsBoundaryBlankLines(t *testing.T) {
 }
 
 func TestObsoleteSnippetConventionsRejected(t *testing.T) {
-	for _, marker := range []string{"<!-- go-source: example.go -->", "<!-- compiled-examples -->"} {
+	for _, marker := range []string{"<!-- go-source: example.go -->", "<!-- compiled-examples -->", "<!-- orm-example: example -->", "<!-- orm-example: example-before -->"} {
 		if _, err := parseDocument("guide.md", []byte(marker+"\n"), nil); err == nil || !strings.Contains(err.Error(), "obsolete guide snippet marker") {
 			t.Fatalf("accepted obsolete marker %q: %v", marker, err)
 		}
@@ -196,7 +197,7 @@ func TestDocumentBoundaries(t *testing.T) {
 		{"malformed directive", "<!-- compiled-source: example.go# -->\n```go\n```", true},
 		{"missing closing fence", "<!-- compiled-source: example.go -->\n```go\nx", true},
 		{"recipe child", "<a id=\"recipe-read\"></a>\n## Read\n### Child\n```go\nx\n```", true},
-		{"recipe sibling", "<a id=\"recipe-read\"></a>\n## Read\n## Reference\n```go\nx\n```", false},
+		{"recipe sibling", "<a id=\"recipe-read\"></a>\n## Read\n## Reference\n```go\nx\n```", true},
 		{"quoted recipe", "<a id=\"recipe-read\"></a>\n## Read\n> ```go\nx\n> ```", true},
 		{"listed recipe", "<a id=\"recipe-read\"></a>\n## Read\n- ```typescript\nx\n  ```", true},
 		{"typescript alias", "<a id=\"recipe-read\"></a>\n## Read\n```ts\nx\n```", true},
@@ -204,10 +205,13 @@ func TestDocumentBoundaries(t *testing.T) {
 		{"agent link", "<a id=\"agent-entry\"></a>\n## Agent entry\n- Read: [Read](#recipe-read)\n", false},
 		{"agent prose", "## Agent entry\nUse this API.\n", true},
 		{"agent fence", "## Agent entry\n```sh\ncommand\n```", true},
-		{"syntax in fence", "```md\n<!-- compiled-source: absent.go -->\n<a id=\"recipe-read\"></a>\n```\n", false},
+		{"syntax in fence", "```markdown\n<!-- compiled-source: absent.go -->\n<a id=\"recipe-read\"></a>\n```\n", false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := parseDocument("guide.md", []byte(test.text), read)
+			doc, err := parseDocument("guide.md", []byte(test.text), read)
+			if err == nil {
+				err = CheckBindings([]Document{doc})
+			}
 			if (err != nil) != test.bad {
 				t.Fatalf("error = %v", err)
 			}
@@ -215,19 +219,25 @@ func TestDocumentBoundaries(t *testing.T) {
 	}
 }
 
-func TestSingleOwningInclusion(t *testing.T) {
-	owner := Inclusion{Document: "one.md", Source: "example.go", Region: "one", First: 2, Last: 5}
-	for _, test := range []struct {
-		region      string
-		first, last int
-		bad         bool
-	}{
-		{"one", 2, 5, true}, {"", 1, 10, true}, {"two", 4, 7, true}, {"two", 6, 8, false},
-	} {
-		other := Inclusion{Document: "two.md", Source: "example.go", Region: test.region, First: test.first, Last: test.last}
-		if err := uniqueOwners([]Inclusion{owner, other}); (err != nil) != test.bad {
-			t.Fatalf("%+v: %v", test, err)
-		}
+func TestRepeatedInclusionAcrossDocuments(t *testing.T) {
+	root := t.TempDir()
+	file := "tests/fixtures/consumer/recipe/example.go"
+	writeInput(t, root, file, "package recipe\n// doc-example:begin value\nvar Value = 1\n// doc-example:end value\n")
+	for _, name := range []string{"docs/guides/one.md", "docs/guides/two.md", "AGENTS.md", ".claude/skills/example/SKILL.md"} {
+		writeInput(t, root, name, "<!-- compiled-source: "+file+"#value -->\n```go\nvar Value = 1\n```\n")
+	}
+	docs, err := Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(docs) != 4 {
+		t.Fatalf("loaded %d documents", len(docs))
+	}
+	if err := Check(docs); err != nil {
+		t.Fatal(err)
+	}
+	if err := CheckBindings(docs); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -289,40 +299,75 @@ func TestCompilationInputs(t *testing.T) {
 	}
 }
 
-func TestCompleteGuidesRetainUnlinkedFenceRejection(t *testing.T) {
-	read := func(string) (source, error) { return source{}, nil }
-	for name := range completeGuides {
-		if _, err := parseDocument("docs/guides/"+name, []byte("# Guide\n```go\nvar x = 1\n```\n"), read); err == nil {
-			t.Fatalf("%s accepted an unbound Go fence", name)
+func TestEveryTeachingDocumentRequiresBindings(t *testing.T) {
+	for _, name := range []string{"docs/guides/reference.md", "docs/guides/dated-20260101.md", "AGENTS.md", "database/AGENTS.md", ".claude/skills/example/SKILL.md", ".claude/skills/example/reference.md"} {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			writeInput(t, root, name, "# Guide\n```go\nvar x = 1\n```\n\n```tsx\nconst view = <Input />;\n```\n")
+			writeInput(t, root, "docs/evidence/record.md", "```go\nvar historical = 1\n```\n")
+			writeInput(t, root, "blueprint/design.md", "```go\nvar planned = 1\n```\n")
+			docs, err := Load(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(docs) != 1 {
+				t.Fatalf("loaded %d documents", len(docs))
+			}
+			err = CheckBindings(docs)
+			if err == nil || !strings.Contains(err.Error(), name+":2: Go block has no compiled source;") || !strings.Contains(err.Error(), name+":6: TypeScript block has no compiled source;") {
+				t.Fatalf("missing diagnostics: %v", err)
+			}
+		})
+	}
+}
+
+func TestHiddenExecutableFences(t *testing.T) {
+	for _, text := range []string{
+		"```\npackage example\n```", "~~~text\nconst value = 1;\n~~~",
+		"> ```typescript\n> const value = 1;\n> ```", "- ````go\n  var value = 1\n  ````",
+		"```ts\nconst value = 1;\n```", "```tsx\nconst value = <Input />;\n```",
+	} {
+		doc, err := parseDocument("guide.md", []byte(text), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := CheckBindings([]Document{doc}); err == nil {
+			t.Fatalf("accepted %q", text)
 		}
 	}
-	if _, err := parseDocument("docs/guides/reference.md", []byte("# Guide\n```go\nvar x = 1\n```\n"), read); err != nil {
-		t.Fatal(err)
+}
+
+func TestOnlyStandaloneRegionMarkers(t *testing.T) {
+	for _, text := range []string{
+		"// doc-example:begin value\nvar Value = 1 // doc-example:end value\n",
+		"type Settings struct { // doc-example:begin settings\n Name string\n} // doc-example:end settings\n",
+		"// migration:value\nvar Value = 1\n// migration:end\n",
+		"// guide:value\nvar Value = 1\n// guide:end\n",
+	} {
+		if _, err := parseSource(text, "go"); err == nil {
+			t.Fatalf("accepted %q", text)
+		}
 	}
 }
 
-func TestTrailingEndMarkerPreservesSourceLine(t *testing.T) {
-	source, err := parseSource("package example\n// doc-example:begin value\nvar Value = 1 // doc-example:end value\n\nvar Other = 2\n", "go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := source.regions["value"].text; got != "var Value = 1\n" {
+func TestDiagnosticShape(t *testing.T) {
+	err := CheckBindings([]Document{{BindingErrors: []error{
+		fmt.Errorf("guide.md:7: Go block has no compiled source; bind it"),
+		fmt.Errorf("AGENTS.md:9: source is missing; restore the referenced file"),
+	}}})
+	want := "guide.md:7: Go block has no compiled source; bind it.\nAGENTS.md:9: source is missing; restore the referenced file."
+	if got := Diagnostics(err); got != want {
 		t.Fatalf("got %q", got)
-	}
-	if got := source.whole.text; got != "package example\nvar Value = 1\n\nvar Other = 2\n" {
-		t.Fatalf("whole file %q", got)
 	}
 }
 
-func TestTrailingBeginLeavesGoDeclarationDirectiveOutsideExcerpt(t *testing.T) {
-	source, err := parseSource("//foundry:config\ntype Settings struct { // doc-example:begin settings\n Name string\n} // doc-example:end settings\n", "go")
+func TestShellGoCommandsAreNotGoStatements(t *testing.T) {
+	text := "```sh\ngo list -m -f '{{.Dir}}' example.test/framework\ngo get -tool \"example.test/framework@${VERSION:?select a version}\"\n```"
+	doc, err := parseDocument("guide.md", []byte(text), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := source.regions["settings"].text; got != "type Settings struct {\n Name string\n}\n" {
-		t.Fatalf("got %q", got)
-	}
-	if !strings.HasPrefix(source.whole.text, "//foundry:config\ntype Settings") {
-		t.Fatal("whole file lost its declaration directive")
+	if err := CheckBindings([]Document{doc}); err != nil {
+		t.Fatal(err)
 	}
 }
