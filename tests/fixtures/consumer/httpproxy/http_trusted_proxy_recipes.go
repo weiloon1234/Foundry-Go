@@ -10,7 +10,7 @@ import (
 
 func proxyHandler(router http.Handler) (http.Handler, error) {
 	// doc-example:begin http-trusted-proxy-1
-	handler, err := foundryhttp.ApplyMiddleware(router,
+	return foundryhttp.ApplyMiddleware(router,
 		foundryhttp.TrustedProxy(foundryhttp.TrustedProxyConfig{
 			Proxies: []netip.Prefix{
 				netip.MustParsePrefix("10.20.0.0/24"),
@@ -22,7 +22,6 @@ func proxyHandler(router http.Handler) (http.Handler, error) {
 		}),
 	)
 	// doc-example:end http-trusted-proxy-1
-	return handler, err
 }
 
 func clientAddress(ctx context.Context) netip.Addr {

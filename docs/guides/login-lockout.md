@@ -118,10 +118,10 @@ For another credential stage, such as MFA, the public typed operation is:
 
 <!-- compiled-source: tests/fixtures/consumer/multifactor/lockout_recipes.go#throttle-factor-check -->
 ```go
-verified, err := throttle.Run(ctx, key, func(op context.Context) (bool, error) {
+// Only a true result with no error may grant authority or issue credentials.
+return throttle.Run(ctx, key, func(op context.Context) (bool, error) {
 	return verifyFactor(op, submittedCode)
 })
-// Only a true result with no error may grant authority or issue credentials.
 ```
 
 Do not issue credentials inside that callback: a final lock/expiry check remains.

@@ -9,7 +9,7 @@ import (
 
 func browserHandler(router http.Handler) (http.Handler, error) {
 	// doc-example:begin http-cors-1
-	handler, err := foundryhttp.ApplyMiddleware(router, foundryhttp.CORS(foundryhttp.CORSConfig{
+	return foundryhttp.ApplyMiddleware(router, foundryhttp.CORS(foundryhttp.CORSConfig{
 		Origins:       []foundryhttp.Origin{"https://console.example.test"},
 		Methods:       []foundryhttp.Method{foundryhttp.PATCH},
 		Headers:       []foundryhttp.HeaderName{"Content-Type", "Authorization"},
@@ -18,7 +18,6 @@ func browserHandler(router http.Handler) (http.Handler, error) {
 		MaxAge:        10 * time.Minute,
 	}))
 	// doc-example:end http-cors-1
-	return handler, err
 }
 
 func browserOrigins() foundryhttp.CORSConfig {

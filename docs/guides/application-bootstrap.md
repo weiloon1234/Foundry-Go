@@ -67,10 +67,9 @@ portal's client-route fallback to that router; see
 
 ## ORM table validation
 
-Register generated ORM declarations explicitly at application construction:
-
 `models.Tables` is the application's table-list helper. It returns a fresh
-`[]orm.CheckedTable` containing the thin `.Table` handles from its generated tables:
+`[]orm.CheckedTable` containing the thin `.Table` handles from its generated tables.
+Register generated ORM declarations explicitly at application construction:
 
 <!-- compiled-source: tests/fixtures/goway/models/tables.go#application-table-list -->
 ```go
@@ -173,7 +172,7 @@ type profileService interface {
 }
 ```
 
-Inputs: `ctx context.Context`, `cookieAuthentication *http.Authentication`, `memberGuard auth.Guard[Member]`, `profileEndpoint http.Endpoint[http.NoPath, http.NoQuery, http.NoBody, Profile]`, `service profileService`.
+Inputs: `ctx context.Context`, `cookieAuthentication *foundryhttp.Authentication`, `memberGuard auth.Guard[Member]`, `profileEndpoint foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, Profile]`, `service profileService`.
 
 <!-- compiled-source: tests/fixtures/consumer/bootstrap/guide_assembly.go#application-bootstrap-3 -->
 ```go

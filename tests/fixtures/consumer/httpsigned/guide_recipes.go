@@ -42,7 +42,7 @@ func previewURL(ctx context.Context, keys foundryhttp.SigningKeys, applicationCl
 		return "", err
 	}
 	preview := foundryhttp.Signed(Preview, signer)
-	link, err := preview.URL(ctx, publicOrigin,
+	return preview.URL(ctx, publicOrigin,
 		UserPath{User: userID},
 		SearchInput{
 			User:     userID,
@@ -52,14 +52,12 @@ func previewURL(ctx context.Context, keys foundryhttp.SigningKeys, applicationCl
 		expiresAt,
 	)
 	// doc-example:end http-signed-urls-1
-	return link, err
 }
 
 func avatarURL(ctx context.Context, signer foundryhttp.URLSigner, publicOrigin foundryhttp.Origin, path AvatarPath, AvatarRoute foundryhttp.Route[AvatarPath]) (string, error) {
 	// doc-example:begin http-signed-urls-2
 	avatar := foundryhttp.SignRoute(AvatarRoute, signer)
 	avatar = foundryhttp.ConfigureSignedRoute(avatar, foundryhttp.PermanentLinks())
-	link, err := foundryhttp.PermanentRouteURL(avatar, ctx, publicOrigin, path)
+	return foundryhttp.PermanentRouteURL(avatar, ctx, publicOrigin, path)
 	// doc-example:end http-signed-urls-2
-	return link, err
 }

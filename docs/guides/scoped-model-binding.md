@@ -1,6 +1,5 @@
 # Alternate keys and nested model binding
 
-T04 native verification passed.
 The [independent consumer](../../tests/fixtures/consumer/nestedbindings/bindings.go)
 contains complete typed declarations and a three-level handler.
 

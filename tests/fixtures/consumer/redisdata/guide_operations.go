@@ -146,13 +146,13 @@ func rankedMembers(ctx context.Context, member Member, store *data.Store, groupI
 	}
 	// doc-example:end redis-data-6
 	// doc-example:begin redis-data-6-add
-	added, err := rankings.Add(ctx, groupID, member.ID, 1250)
+	_, err = rankings.Add(ctx, groupID, member.ID, 1250) // first result: true when the member is new
 	if err != nil {
 		return err
 	}
 	// doc-example:end redis-data-6-add
 	// doc-example:begin redis-data-6-increment
-	score, err := rankings.Increment(ctx, groupID, member.ID, 25)
+	_, err = rankings.Increment(ctx, groupID, member.ID, 25) // first result: the new score
 	if err != nil {
 		return err
 	}
@@ -164,7 +164,7 @@ func rankedMembers(ctx context.Context, member Member, store *data.Store, groupI
 	}
 	// doc-example:end redis-data-6-top
 	// doc-example:begin redis-data-6-rank
-	rank, found, err := rankings.Rank(ctx, groupID, member.ID, data.Descending)
+	_, _, err = rankings.Rank(ctx, groupID, member.ID, data.Descending) // zero-based position, then whether the member is ranked
 	if err != nil {
 		return err
 	}
@@ -181,11 +181,7 @@ func rankedMembers(ctx context.Context, member Member, store *data.Store, groupI
 		return err
 	}
 	// doc-example:end redis-data-6-count
-	_ = added
-	_ = score
 	_ = top
-	_ = rank
-	_ = found
 	_ = window
 	_ = count
 	return err

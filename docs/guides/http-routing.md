@@ -38,8 +38,8 @@ MemberShow := foundryhttp.DefineRoute(
 )
 MemberShow = foundryhttp.ConfigureRoute(MemberShow, foundryhttp.Within(foundryhttp.DefineScope("/api", "api")))
 
-location, err := foundryhttp.RouteURL(MemberShow, MemberPath{Member: member.ID})
-// /api/members/<member UUID>
+// The URL is /api/members/<member UUID>.
+return foundryhttp.RouteURL(MemberShow, MemberPath{Member: member.ID})
 ```
 
 Here `Member` is the consumer's model, `model` is Foundry's model package and

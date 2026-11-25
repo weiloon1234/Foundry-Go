@@ -6,7 +6,7 @@ writers. Apply it around the router to cover fallback responses too.
 
 These recipes need no application model; the transport and helper types they use are declared or described on this page.
 
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `http` as `foundryhttp`, `value`.
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `http` as `foundryhttp`, `value`. Standard-library aliases: `net/http` as `stdhttp`.
 
 <!-- compiled-source: tests/fixtures/consumer/httpsecurity/csp_recipes.go#http-content-security-policy-1 -->
 ```go
@@ -83,6 +83,8 @@ application supports. Never substitute `'unsafe-eval'` for compatibility.
 
 ## Configure an application allowlist
 
+The blocks in this section continue one scope: an `Inputs:` line names only what no earlier block in the section has introduced.
+
 `application.HTTPSettings.CSPAllowlist` contains an `http.CSPAllowlist`. The
 framework default is empty. Applications opt in through config or code defaults
 and pass the loaded allowlist to `http.ApplyCSPAllowlist` when composing their
@@ -119,7 +121,7 @@ settings.HTTP.CSPAllowlist.Presets = []foundryhttp.CSPPreset{
 }
 ```
 
-Inputs: `settings application.Settings`, `router http.Handler`.
+Inputs: `router stdhttp.Handler`.
 
 Apply the loaded settings before constructing the middleware:
 
@@ -195,7 +197,7 @@ demonstrates the complete composition.
 
 ## Rendering with a nonce
 
-Inputs: `writer http.ResponseWriter`, `request *http.Request`, `page *template.Template`.
+Inputs: `writer stdhttp.ResponseWriter`, `request *stdhttp.Request`, `page *template.Template`.
 
 `CSPNonceSource()` requests a nonce for script/style element directives. The
 middleware generates 32 cryptographically random bytes per request and exposes

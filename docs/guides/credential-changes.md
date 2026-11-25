@@ -25,6 +25,9 @@ if err != nil {
 	return nil, err
 }
 revocations, err := auth.NewRevocations(users, web, api)
+if err != nil {
+	return nil, err
+}
 // Pass the Invalidate method of revocations as the reset model's Invalidate callback.
 ```
 

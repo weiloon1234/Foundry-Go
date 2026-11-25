@@ -67,7 +67,7 @@ createPage := service.Create
 
 </details>
 
-Inputs: `adminGuard http.GuardBinding[Admin]`, `manage auth.AccessScopes[Admin]`.
+Inputs: `adminGuard foundryhttp.GuardBinding[Admin]`, `manage auth.AccessScopes[Admin]`.
 
 <!-- compiled-source: tests/fixtures/consumer/httpendpoints/flat_route_recipes.go#flat-routes-1 -->
 ```go
@@ -103,7 +103,7 @@ Do not pass a call to `http.Authenticated` directly as the first argument of
 Assign each result first, as below. `query`, `body`, and `response` are
 `http.EmptyQuery()`, `SavePageBody()`, and `PageResponse(201)`.
 
-Inputs: `route http.Route[http.NoPath]`, `access http.GuardBinding[Admin]`, `store *idempotency.Store`, `definition idempotency.Definition`.
+Inputs: `route foundryhttp.Route[foundryhttp.NoPath]`, `access foundryhttp.GuardBinding[Admin]`, `store *idempotency.Store`, `definition idempotency.Definition`.
 
 <!-- compiled-source: tests/fixtures/consumer/httpendpoints/flat_route_recipes.go#flat-routes-3 -->
 ```go
@@ -114,7 +114,7 @@ return foundryhttp.IdempotentAuthenticated(secured, store, definition)
 
 `route` is the public `http.Route[http.NoPath]`; `endpoint` is the guarded endpoint assembled above. Use `query = http.EmptyQuery()`, `body = SavePageBody()`, and `response = PageResponse(200)`. `showPage` and `createPage` are `service.Show` and `service.Create`; `pathValue` and `queryValue` are `http.NoPath{}` and `http.NoQuery{}`.
 
-Inputs: `ctx context.Context`, `adminGuard http.GuardBinding[Admin]`.
+Inputs: `ctx context.Context`, `adminGuard foundryhttp.GuardBinding[Admin]`.
 
 Descriptors (`XBody()`, `XResponse(...)`, `http.EmptyQuery()`), options
 (`http.Scopes(...)`, `http.Errors(...)`, `http.Within(...)`), scopes and
@@ -128,6 +128,9 @@ are also allowed, including when the registration or URL is passed to another ca
 public := foundryhttp.DefineEndpoint(route, query, body, response).Handle(showPage)
 admin := foundryhttp.Authenticated(endpoint, adminGuard).Handle(createPage)
 url, err := foundryhttp.DefineEndpoint(route, query, body, response).URL(ctx, pathValue, queryValue)
+if err != nil {
+	return nil, "", err
+}
 ```
 
 Use named stages before free-function terminals such as `pagination.Handle`.
@@ -136,7 +139,7 @@ inside a typed initializer function when several statements are necessary.
 
 ## Generated HTTP pieces
 
-Inputs: `create http.Route[http.NoPath]`.
+Inputs: `create foundryhttp.Route[foundryhttp.NoPath]`.
 
 Use the concrete helper beside a generated DTO declaration:
 

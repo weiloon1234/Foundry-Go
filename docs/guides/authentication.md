@@ -125,6 +125,8 @@ eligibility still apply. `token.Tokens` binds redeemed tickets this way.
 
 ## Request scopes and ownership
 
+The blocks in this section continue one scope: an `Inputs:` line names only what no earlier block in the section has introduced.
+
 Inputs: `ctx context.Context`, `api auth.Guard[models.User]`, `web auth.Guard[models.User]`, `credentials auth.Credentials`, `readOrder auth.Policy[models.User, models.Order]`.
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/scope_recipes.go#manual-request-scope -->
@@ -139,17 +141,17 @@ if err != nil {
 }
 defer scope.Close()
 ctx = scope.Context()
-user, err := api.Require(ctx)
+return api.Require(ctx)
 ```
 
-Inputs: `ctx context.Context`, `settings application.Settings`, `readOrder auth.Policy[models.User, models.Order]`.
+Inputs: `settings application.Settings`.
 
 With configured `application.New` assembly, contribute policies, permissions and
 hooks to the application-owned registry instead of building one:
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/scope_recipes.go#configured-authorization -->
 ```go
-app, err := application.New(settings).Register(application.Authorization("app.authorization",
+return application.New(settings).Register(application.Authorization("app.authorization",
 	application.Authorize(ViewAccount), application.Authorize(readOrder),
 )).Build(ctx)
 ```
@@ -550,9 +552,7 @@ uses the helpers alongside its existing guard and permission declarations. The t
 
 ## Signed endpoints and bound resources
 
-Configure scopes, permissions and ordinary endpoint options, then call `SignedAuthenticated`:
-
-The application owns the path type. Pass its endpoint and resource resolver explicitly:
+The application owns the path type:
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/composed_routes.go#order-path -->
 ```go
@@ -560,7 +560,9 @@ The application owns the path type. Pass its endpoint and resource resolver expl
 type OrderPath struct{ Order model.ID[models.Order] }
 ```
 
-Inputs: `endpoint http.Endpoint[OrderPath, http.NoQuery, http.NoBody, http.NoContent]`, `authentication *http.Authentication`, `api auth.Guard[models.User]`, `signer http.URLSigner`, `orders modelbinding.Resolver[OrderPath, models.Order]`.
+Inputs: `endpoint foundryhttp.Endpoint[OrderPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.NoContent]`, `authentication *foundryhttp.Authentication`, `api auth.Guard[models.User]`, `signer foundryhttp.URLSigner`, `orders modelbinding.Resolver[OrderPath, models.Order]`.
+
+Configure scopes, permissions and ordinary endpoint options, then call `SignedAuthenticated`. Pass the endpoint and resource resolver explicitly:
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/composition_recipes.go#signed-bound-order -->
 ```go
@@ -598,7 +600,7 @@ resources never produce partially populated models for a handler.
 
 ## Authenticated native handlers
 
-Inputs: `route http.Route[OrderPath]`, `authentication *http.Authentication`, `api auth.Guard[models.User]`, `handle func(stdhttp.ResponseWriter, *stdhttp.Request, models.User, OrderPath)`.
+Inputs: `route foundryhttp.Route[OrderPath]`, `authentication *foundryhttp.Authentication`, `api auth.Guard[models.User]`, `handle func(stdhttp.ResponseWriter, *stdhttp.Request, models.User, OrderPath)`.
 
 For native `net/http` integration, bind authentication to the typed route itself:
 
@@ -638,7 +640,7 @@ Middleware added with `Use` runs before authentication. Use
 their native route forms for middleware that needs the actor. It runs after the
 guard, access scopes and permissions, inside the request's auth scope, and reads
 the concrete model with `guard.Require(r.Context())` (or `Optional`) from the
-scope cache, without another provider lookup:
+scope cache, without another provider lookup.
 
 The application owns its tenant identifier and request metadata helper:
 
@@ -655,7 +657,9 @@ func WithTenant(ctx context.Context, tenant TenantID) context.Context {
 }
 ```
 
-Inputs: `endpoint http.Endpoint[http.NoPath, http.NoQuery, http.NoBody, http.NoContent]`, `transport *http.Authentication`, `api auth.Guard[models.User]`, `store *ratelimit.Store`, `tenantOf func(context.Context, models.User) (TenantID, error)`.
+Inputs: `endpoint foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.NoContent]`, `transport *foundryhttp.Authentication`, `api auth.Guard[models.User]`, `store *ratelimit.Store`, `tenantOf func(context.Context, models.User) (TenantID, error)`.
+
+Declare the tenant middleware and install it with the rate limiter as actor middleware:
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/composition_recipes.go#actor-middleware-order -->
 ```go
@@ -738,7 +742,6 @@ See [social login](social-login.md).
 
 See [authentication operations](auth-operations.md) for typed MFA observations,
 transactional outbox composition, bounded pruning and account retirement.
-Milestone 10 acceptance includes these contracts.
 
 ## Cookie response caching
 

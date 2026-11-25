@@ -17,10 +17,9 @@ var orders = orm.HasManyOf(models.Users.Orders, models.Users.ID, models.Orders.B
 
 func eagerUsers(ctx context.Context, db database.Executor) ([]models.User, error) {
 	// doc-example:begin model-relations-2
-	users, err := orm.All(ctx, db, models.Users.Query().With(models.UserLinks.Introducer,
+	return orm.All(ctx, db, models.Users.Query().With(models.UserLinks.Introducer,
 		models.UserLinks.Orders.OrderBy(orm.Desc(models.Orders.TotalCents))))
 	// doc-example:end model-relations-2
-	return users, err
 }
 
 func activeIntroducers(ctx context.Context, db database.Executor) ([]models.User, error) {

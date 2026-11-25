@@ -1,5 +1,7 @@
 # Generic DTO contracts
 
+The blocks in this section continue one scope: an `Inputs:` line names only what no earlier block in the section has introduced.
+
 T01 passed native verification, consumer/client/compiler/editor acceptance and
 cost measurements.
 
@@ -58,8 +60,6 @@ type Lookup[K comparable, V any] struct {
 	Values map[K]V `json:"values"`
 }
 ```
-
-Inputs: `userJSON contract.JSON[UserDTO]`.
 
 <!-- compiled-source: tests/fixtures/consumer/genericdto/guide_recipes.go#generic-dtos-3 -->
 ```go

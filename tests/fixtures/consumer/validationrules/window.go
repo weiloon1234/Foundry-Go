@@ -18,7 +18,6 @@ type AvailabilityWindow struct {
 func WindowRules() validation.Rule[AvailabilityWindow] {
 	// doc-example:begin compare-window-fields
 	fields := AvailabilityWindowValidationFields()
-	rules := validation.BeforeField(fields.Start, fields.End)
+	return validation.BeforeField(fields.Start, fields.End)
 	// doc-example:end compare-window-fields
-	return rules
 }

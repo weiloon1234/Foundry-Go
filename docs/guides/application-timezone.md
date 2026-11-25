@@ -29,6 +29,8 @@ an embedded IANA fallback for minimal images; updates follow the Go toolchain.
 
 ## Retain a concrete date service
 
+The blocks in this section continue one scope: an `Inputs:` line names only what no earlier block in the section has introduced.
+
 Construct domain services with `s.Time()` and retain the returned `temporal.Service`.
 It borrows the application's injected clock, including `application.WithClock`
 test clocks, and binds calendar/presentation operations to the selected timezone.
@@ -50,20 +52,35 @@ Inputs: `s application.Services`.
 return NewReports(s.Time())
 ```
 
-Inputs: `s application.Services`.
-
-The following operations each return a value and an error; check the error after every call as usual (the sequence stays short here):
+The following operations each return a value and an error, so each call is followed by its check:
 
 <!-- compiled-source: tests/fixtures/consumer/reporting/guide_timezone.go#application-timezone-3 -->
 ```go
-// Check err after each call.
 dates := s.Time()
-now, err := dates.Now()     // UTC instant
+now, err := dates.Now() // UTC instant
+if err != nil {
+	return err
+}
 today, err := dates.Today() // date in the application zone
+if err != nil {
+	return err
+}
 when, err := dates.Parse("2026-09-26T09:00:00")
-text, err := dates.Format(when)         // 2026-09-26T09:00:00+08:00
-start, err := dates.StartOfDay(when)    // local midnight as a UTC instant
+if err != nil {
+	return err
+}
+text, err := dates.Format(when) // 2026-09-26T09:00:00+08:00
+if err != nil {
+	return err
+}
+start, err := dates.StartOfDay(when) // local midnight as a UTC instant
+if err != nil {
+	return err
+}
 tomorrow, err := dates.AddDays(when, 1) // same local time next calendar day
+if err != nil {
+	return err
+}
 ```
 
 `Date(instant)` and `Local(instant)` extract typed calendar values. `Location()`
@@ -95,7 +112,7 @@ Inside an application schedule constructor:
 <!-- compiled-source: tests/fixtures/consumer/reporting/guide_timezone.go#application-timezone-4 -->
 ```go
 calendar := s.Calendar()
-daily, err := calendar.DailyAt("reports.daily", "09:00", handler)
+return calendar.DailyAt("reports.daily", "09:00", handler)
 ```
 
 Enable/configure the scheduler and coordination as described in the

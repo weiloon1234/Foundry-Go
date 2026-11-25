@@ -9,7 +9,6 @@
 
 ## Overview
 
-Milestone 15 passed native verification, race checks and consumer review.
 The local [channel/protocol guide](websocket.md) owns declarations, payload DTOs,
 room authorization and protocol version 1. This guide adds distributed behavior.
 The executable consumer is [realtime](../../tests/fixtures/consumer/realtime/orders.go).

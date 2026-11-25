@@ -47,6 +47,8 @@ Existence asks whether any matching row exists. It does not hydrate a singular r
 
 ## Compose nested and alternative conditions
 
+The blocks in this section continue one scope: an `Inputs:` line names only what no earlier block in the section has introduced.
+
 Inputs: `ctx context.Context`, `db database.Executor`, `orders orm.HasMany[models.User, models.Order]`.
 
 `orm.Has(relation)` returns a predicate owned by the parent model. This integrates with the ordinary boolean query API:
@@ -54,13 +56,11 @@ Inputs: `ctx context.Context`, `db database.Executor`, `orders orm.HasMany[model
 <!-- compiled-source: tests/fixtures/consumer/relationshipfilters/guide_filters.go#model-relationship-filters-2 -->
 ```go
 u := models.Users
-users, err := orm.All(ctx, db, models.Users.Query().Where(orm.Or(
+return orm.All(ctx, db, models.Users.Query().Where(orm.Or(
 	orm.Has(orders),
 	orm.Eq(u.Status, models.StatusActive),
 )))
 ```
-
-Inputs: `ctx context.Context`, `db database.Executor`.
 
 Nested related filters use the same descriptors:
 

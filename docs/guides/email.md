@@ -10,10 +10,7 @@
 
 ## Overview
 
-Milestone 16 passed native verification and consumer review. Real-account provider
-smoke sends remain an explicit verification gap.
-The Cloudflare and direct attachment source additions passed the
-2026-10-03 follow-up checks.
+Real-account provider smoke sends remain an explicit verification gap.
 
 `email` owns validated addresses, immutable message builders, typed templates, bounded attachment resolution and MIME. A `Mailer` borrows a transport and the existing storage registry. Use the ordinary [jobs](jobs.md) API for queued data and transactional publication; there is no separate email queue.
 

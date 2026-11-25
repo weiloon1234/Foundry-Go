@@ -2,16 +2,16 @@
 
 These recipes need no application model; the transport and helper types they use are declared or described on this page.
 
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `http` as `foundryhttp`, `value`.
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `http` as `foundryhttp`, `value`. Standard-library aliases: `net/http` as `stdhttp`.
 
-Inputs: `router http.Handler`.
+Inputs: `router stdhttp.Handler`.
 
 Use `ETags(DefaultETagConfig())` through ordinary middleware assembly:
 
 <!-- compiled-source: tests/fixtures/consumer/httpetags/http_etags_recipes.go#http-etags-1 -->
 ```go
 config := foundryhttp.DefaultETagConfig()
-handler, err := foundryhttp.ApplyMiddleware(router, foundryhttp.ETags(config))
+return foundryhttp.ApplyMiddleware(router, foundryhttp.ETags(config))
 ```
 
 The [independent consumer](../../tests/fixtures/consumer/httpetags/etags.go)
@@ -71,7 +71,7 @@ reading the complete body; automatic hashing requires producing the bytes.
 
 ## Cache-Control policy
 
-Inputs: `router http.Handler`.
+Inputs: `router stdhttp.Handler`.
 
 `CacheControl(policy)` declares a typed `Cache-Control` for GET and HEAD
 responses and composes with ETags, so clients revalidate cheaply with 304:
@@ -84,7 +84,7 @@ policy := foundryhttp.CachePolicy{
 	SharedMaxAge:         value.Set(5 * time.Minute), // s-maxage
 	StaleWhileRevalidate: 30 * time.Second,
 }
-handler, err := foundryhttp.ApplyMiddleware(router,
+return foundryhttp.ApplyMiddleware(router,
 	foundryhttp.CacheControl(policy),
 	foundryhttp.ETags(foundryhttp.DefaultETagConfig()),
 )

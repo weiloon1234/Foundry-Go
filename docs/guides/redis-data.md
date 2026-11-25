@@ -69,6 +69,8 @@ return zero values, and operations requiring a store return an error.
 
 ## Read and write typed fields
 
+The blocks in this section continue one scope: an `Inputs:` line names only what no earlier block in the section has introduced.
+
 Inputs: `ctx context.Context`, `member Member`, `profiles Profiles`.
 
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-2 -->
@@ -86,8 +88,6 @@ if err != nil {
 
 Read the profile.
 
-Inputs: `ctx context.Context`, `member Member`, `profiles Profiles`.
-
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-2-read -->
 ```go
 profile, found, err := profiles.Get(ctx, member.ID, DisplayProfile)
@@ -98,8 +98,6 @@ if err != nil {
 
 Delete the field.
 
-Inputs: `ctx context.Context`, `member Member`, `profiles Profiles`.
-
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-2-delete -->
 ```go
 removed, err := profiles.DeleteField(ctx, member.ID, DisplayProfile)
@@ -109,8 +107,6 @@ if err != nil {
 ```
 
 Count the remaining fields.
-
-Inputs: `ctx context.Context`, `member Member`, `profiles Profiles`.
 
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-2-count -->
 ```go
@@ -134,6 +130,8 @@ fixture verifies that a getter-selected email survives the hash round trip.
 
 ## Add, remove and enumerate members
 
+The blocks in this section continue one scope: an `Inputs:` line names only what no earlier block in the section has introduced.
+
 Inputs: `ctx context.Context`, `member Member`, `groupID models.GroupCode`, `groups MemberGroups`.
 
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-3 -->
@@ -146,8 +144,6 @@ if err != nil {
 
 Check membership.
 
-Inputs: `ctx context.Context`, `member Member`, `groupID models.GroupCode`, `groups MemberGroups`.
-
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-3-contains -->
 ```go
 present, err := groups.Contains(ctx, member.ID, groupID)
@@ -157,8 +153,6 @@ if err != nil {
 ```
 
 Read the members.
-
-Inputs: `ctx context.Context`, `member Member`, `groups MemberGroups`.
 
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-3-members -->
 ```go
@@ -170,8 +164,6 @@ if err != nil {
 
 Remove one member.
 
-Inputs: `ctx context.Context`, `member Member`, `groupID models.GroupCode`, `groups MemberGroups`.
-
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-3-remove -->
 ```go
 removed, err := groups.Remove(ctx, member.ID, groupID)
@@ -181,8 +173,6 @@ if err != nil {
 ```
 
 Count the members.
-
-Inputs: `ctx context.Context`, `member Member`, `groups MemberGroups`.
 
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-3-count -->
 ```go
@@ -200,6 +190,8 @@ slice, including an empty slice for a missing set, sorted by encoded JSON bytes.
 This order is deterministic; apply native slice sorting for domain or numeric order.
 
 ## Batch reads and exact counters
+
+The blocks in this section continue one scope: an `Inputs:` line names only what no earlier block in the section has introduced.
 
 Inputs: `ctx context.Context`, `member Member`, `profiles Profiles`.
 
@@ -241,7 +233,7 @@ var Counts = data.DefineHash[model.ID[Member], ActivityKind, int64]("member-acti
 	WithFieldDecoder(func(text string) (ActivityKind, error) { return ActivityKind(text), nil })
 ```
 
-Inputs: `ctx context.Context`, `member Member`, `counts ActivityCounts`.
+Inputs: `counts ActivityCounts`.
 
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-5 -->
 ```go
@@ -252,8 +244,6 @@ if err != nil {
 ```
 
 Increment the counter.
-
-Inputs: `ctx context.Context`, `member Member`, `counts ActivityCounts`.
 
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-5-increment -->
 ```go
@@ -276,6 +266,8 @@ The value bound must allow 20 bytes.
 
 ## Scored rankings with sorted sets
 
+The blocks in this section continue one scope: an `Inputs:` line names only what no earlier block in the section has introduced.
+
 <!-- compiled-source: tests/fixtures/consumer/redisdata/rankings.go#redis-data-6 -->
 ```go
 var Rankings = data.DefineSortedSet[models.GroupCode, model.ID[Member]]("group-rankings", 1, keyspace.StringKeys[models.GroupCode]())
@@ -297,7 +289,7 @@ Inputs: `ctx context.Context`, `member Member`, `groupID models.GroupCode`, `ran
 
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-6-add -->
 ```go
-added, err := rankings.Add(ctx, groupID, member.ID, 1250)
+_, err = rankings.Add(ctx, groupID, member.ID, 1250) // first result: true when the member is new
 if err != nil {
 	return err
 }
@@ -305,19 +297,15 @@ if err != nil {
 
 Increment the score.
 
-Inputs: `ctx context.Context`, `member Member`, `groupID models.GroupCode`, `rankings data.SortedSet[models.GroupCode, model.ID[Member]]`.
-
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-6-increment -->
 ```go
-score, err := rankings.Increment(ctx, groupID, member.ID, 25)
+_, err = rankings.Increment(ctx, groupID, member.ID, 25) // first result: the new score
 if err != nil {
 	return err
 }
 ```
 
 Read the top ten members.
-
-Inputs: `ctx context.Context`, `groupID models.GroupCode`, `rankings data.SortedSet[models.GroupCode, model.ID[Member]]`.
 
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-6-top -->
 ```go
@@ -329,19 +317,15 @@ if err != nil {
 
 Read one member's rank.
 
-Inputs: `ctx context.Context`, `member Member`, `groupID models.GroupCode`, `rankings data.SortedSet[models.GroupCode, model.ID[Member]]`.
-
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-6-rank -->
 ```go
-rank, found, err := rankings.Rank(ctx, groupID, member.ID, data.Descending)
+_, _, err = rankings.Rank(ctx, groupID, member.ID, data.Descending) // zero-based position, then whether the member is ranked
 if err != nil {
 	return err
 }
 ```
 
 Read a bounded score window.
-
-Inputs: `ctx context.Context`, `groupID models.GroupCode`, `rankings data.SortedSet[models.GroupCode, model.ID[Member]]`.
 
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-6-window -->
 ```go
@@ -352,8 +336,6 @@ if err != nil {
 ```
 
 Count the score range.
-
-Inputs: `ctx context.Context`, `groupID models.GroupCode`, `rankings data.SortedSet[models.GroupCode, model.ID[Member]]`.
 
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-6-count -->
 ```go
@@ -374,6 +356,8 @@ re-score existing members but rejects growth. `Score` and `Rank` distinguish a
 missing member. Replies are checked for window size, order and payload bounds.
 
 ## Bounded lists
+
+The blocks in this section continue one scope: an `Inputs:` line names only what no earlier block in the section has introduced.
 
 <!-- compiled-source: tests/fixtures/consumer/redisdata/rankings.go#redis-data-7 -->
 ```go
@@ -400,8 +384,6 @@ if err != nil {
 
 Prepend a supplied activity.
 
-Inputs: `ctx context.Context`, `groupID models.GroupCode`, `newest Activity`.
-
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-7-prepend -->
 ```go
 length, err = recent.PushFront(ctx, groupID, newest)
@@ -412,8 +394,6 @@ if err != nil {
 
 Read the bounded list.
 
-Inputs: `ctx context.Context`, `groupID models.GroupCode`.
-
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-7-read -->
 ```go
 items, err := recent.Range(ctx, groupID, 0, -1)
@@ -423,8 +403,6 @@ if err != nil {
 ```
 
 Pop the oldest activity.
-
-Inputs: `ctx context.Context`, `groupID models.GroupCode`.
 
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-7-pop -->
 ```go
@@ -444,6 +422,8 @@ an element that then fails JSON decoding is reported as an error and stays remov
 
 ## Existence, expiry and deletion
 
+The blocks in this section continue one scope: an `Inputs:` line names only what no earlier block in the section has introduced.
+
 Inputs: `ctx context.Context`, `member Member`, `groups MemberGroups`.
 
 Every handle exposes `Exists`, `Expire`, `.Count`, `Delete` and `DeleteMany` while
@@ -459,8 +439,6 @@ if err != nil {
 
 Set a TTL.
 
-Inputs: `ctx context.Context`, `member Member`, `groups MemberGroups`.
-
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-8-expire -->
 ```go
 changed, err := groups.Expire(ctx, member.ID, cache.For(time.Hour))
@@ -470,8 +448,6 @@ if err != nil {
 ```
 
 Remove the TTL.
-
-Inputs: `ctx context.Context`, `member Member`, `groups MemberGroups`.
 
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-8-persist -->
 ```go
@@ -483,7 +459,7 @@ if err != nil {
 
 Delete the selected members' lists.
 
-Inputs: `ctx context.Context`, `groups MemberGroups`, `firstMember Member`, `secondMember Member`.
+Inputs: `firstMember Member`, `secondMember Member`.
 
 <!-- compiled-source: tests/fixtures/consumer/redisdata/guide_operations.go#redis-data-8-delete -->
 ```go

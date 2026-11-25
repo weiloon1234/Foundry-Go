@@ -13,8 +13,6 @@
 
 ## Overview
 
-Milestone 18 passed native verification and consumer review.
-
 A model can also declare collections as `attachments.One`/`Many` fields; see
 [model extension slots](model-extension-slots.md). Slots reuse this policy and
 publication workflow.

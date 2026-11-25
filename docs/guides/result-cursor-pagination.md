@@ -53,6 +53,9 @@ values := rows.DistinctScalar(rows.SelectScalar(rows.From(users.Query()),
 cursor := rows.ValueCursorFor(rows.Values(values))
 ordered := cursor.OrderBy(expr.Asc(cursor.Value())).UniqueBy(expr.Group(cursor.Value()))
 page, err := ordered.Paginate(ctx, db, orm.CursorRequest[value.Nullable[string]]{Size: 20})
+if err != nil {
+	return orm.CursorPage[value.Nullable[string]]{}, err
+}
 ```
 
 `Value()` retains the exact scalar codec; `expr.Group(cursor.Value())` identifies its output column. `UniqueBy(expr.Group(cursor.Value()))` asserts that values are unique. The explicit `rows.DistinctScalar` above removes duplicates, including repeated NULLs. No deduplication is implicit in the cursor builder.

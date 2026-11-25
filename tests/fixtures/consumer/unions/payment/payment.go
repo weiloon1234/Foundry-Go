@@ -37,10 +37,9 @@ func paymentLabel(useToken func(string)) (string, error) {
 	if selected {
 		useToken(card.Token)
 	}
-	label, err := MatchPaymentMethod(method,
+	return MatchPaymentMethod(method,
 		func(card CardDTO) (string, error) { return card.Token, nil },
 		func(bank BankDTO) (string, error) { return bank.Reference, nil },
 	)
 	// doc-example:end tagged-unions-2
-	return label, err
 }

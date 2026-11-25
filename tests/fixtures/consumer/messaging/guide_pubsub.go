@@ -41,9 +41,8 @@ func publishAndReceive(ctx context.Context, broker *pubsub.Broker, member Member
 
 func redisBroker(client *redis.Client, namespace keyspace.Namespace) (*pubsub.Broker, error) {
 	// doc-example:begin pubsub-2
-	broker, err := pubsub.NewBroker(client, pubsub.DefaultConfig(namespace))
+	return pubsub.NewBroker(client, pubsub.DefaultConfig(namespace))
 	// doc-example:end pubsub-2
-	return broker, err
 }
 
 func superviseMember(ctx context.Context, topic pubsub.Topic[model.ID[Member], MemberChange], member Member, apply func(context.Context, MemberChange) error, reloadMember func(context.Context, model.ID[Member]) error) error {

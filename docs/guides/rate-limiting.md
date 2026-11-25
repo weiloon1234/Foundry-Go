@@ -101,14 +101,28 @@ Inputs: `ctx context.Context`, `limiter ratelimit.Limiter[model.ID[Member]]`, `m
 
 <!-- compiled-source: tests/fixtures/consumer/limiting/guide_recipes.go#inspect-member-quota -->
 ```go
-// Check err after each call.
-decision, err := limiter.Peek(ctx, member.ID, 5)    // non-consuming Decision
+decision, err := limiter.Peek(ctx, member.ID, 5) // non-consuming Decision
+if err != nil {
+	return err
+}
 remaining, err := limiter.Remaining(ctx, member.ID) // uint32
+if err != nil {
+	return err
+}
 wait, err := limiter.AvailableIn(ctx, member.ID, 5) // time.Duration, 0 if it fits now
-cleared, err := limiter.Clear(ctx, member.ID)       // bool
+if err != nil {
+	return err
+}
+cleared, err := limiter.Clear(ctx, member.ID) // bool
+if err != nil {
+	return err
+}
 decision, err = limiter.Attempt(ctx, member.ID, 1, func(ctx context.Context) error {
 	return sendVerification(ctx, member)
 })
+if err != nil {
+	return err
+}
 ```
 
 `Peek` reports the decision a cost would receive now without consuming capacity

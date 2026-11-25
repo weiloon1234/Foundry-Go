@@ -2,9 +2,9 @@
 
 These recipes need no application model; the transport and helper types they use are declared or described on this page.
 
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `clock`, `encryption`, `http` as `foundryhttp`, `secret`.
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `clock`, `encryption`, `http` as `foundryhttp`, `secret`. Standard-library aliases: `net/http` as `stdhttp`.
 
-Inputs: `ctx context.Context`, `writer http.ResponseWriter`, `request *http.Request`.
+Inputs: `ctx context.Context`, `writer stdhttp.ResponseWriter`, `request *stdhttp.Request`.
 
 Declare one cookie with its name, concrete value codec and scope. Reuse the same
 declaration for reads, writes and removal:
@@ -84,7 +84,7 @@ including name and scope attributes, are limited to 4,096 bytes.
 
 ## Signed cookies
 
-Inputs: `ctx context.Context`, `writer http.ResponseWriter`, `configuredKey secret.String`, `applicationClock clock.Clock`, `remember foundryhttp.Cookie[bool]`.
+Inputs: `ctx context.Context`, `writer stdhttp.ResponseWriter`, `configuredKey secret.String`, `applicationClock clock.Clock`, `remember foundryhttp.Cookie[bool]`.
 
 Create a reusable rotation set using protected configuration values, then inject
 the application clock:
@@ -133,7 +133,7 @@ authenticate a user or replace an authorization check.
 
 ## Encrypted cookies
 
-Inputs: `ctx context.Context`, `writer http.ResponseWriter`, `keyring *encryption.Keyring`, `applicationClock clock.Clock`, `remember foundryhttp.Cookie[bool]`.
+Inputs: `ctx context.Context`, `writer stdhttp.ResponseWriter`, `keyring *encryption.Keyring`, `applicationClock clock.Clock`, `remember foundryhttp.Cookie[bool]`.
 
 When a browser must not read the value, encrypt it with the application's
 [encryption keyring](../../encryption/doc.go) instead of signing it:

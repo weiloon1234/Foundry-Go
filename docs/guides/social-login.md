@@ -88,7 +88,7 @@ type SocialHandoffs interface {
 type socialHandoffContextKey struct{}
 ```
 
-Inputs: `services application.Services`, `client *oauth.Client`, `web *http.BrowserSessions[models.User, model.ID[models.User]]`, `handoffs SocialHandoffs`.
+Inputs: `services application.Services`, `client *oauth.Client`, `web *foundryhttp.BrowserSessions[models.User, model.ID[models.User]]`, `handoffs SocialHandoffs`.
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/oauth_recipes.go#social-flow-routes -->
 ```go

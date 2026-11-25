@@ -33,8 +33,7 @@ func memberURL(member Member) (string, error) {
 	)
 	MemberShow = foundryhttp.ConfigureRoute(MemberShow, foundryhttp.Within(foundryhttp.DefineScope("/api", "api")))
 
-	location, err := foundryhttp.RouteURL(MemberShow, MemberPath{Member: member.ID})
-	// /api/members/<member UUID>
+	// The URL is /api/members/<member UUID>.
+	return foundryhttp.RouteURL(MemberShow, MemberPath{Member: member.ID})
 	// doc-example:end http-routing-1
-	return location, err
 }

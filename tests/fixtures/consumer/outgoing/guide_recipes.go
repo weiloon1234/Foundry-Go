@@ -27,7 +27,6 @@ func publicClient() (*httpclient.Client, error) {
 	settings := httpclient.DefaultConfig("preview")
 	settings.Destination = httpclient.PublicDestinations()      // HTTPS, port 443
 	settings.Destination.Hosts = []string{"images.example.com"} // optional exact names
-	client, err := httpclient.New(settings, nil)
+	return httpclient.New(settings, nil)
 	// doc-example:end http-client-4
-	return client, err
 }

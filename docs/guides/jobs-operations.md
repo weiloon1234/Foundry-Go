@@ -380,5 +380,5 @@ maintenance, including lease expiry, retention, accounting or workflow advanceme
 There is no queue dashboard, autoscaling controller or automatic failed-workflow
 recovery. The framework owns queue execution and the reusable operator commands;
 the boilerplate supplies domain declarations, configuration and the CLI entry point.
- Use the [boilerplate handoff](jobs-boilerplate-handoff.md)
+Use the [boilerplate handoff](jobs-boilerplate-handoff.md)
 for application integration and deployment acceptance.

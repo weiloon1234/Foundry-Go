@@ -90,8 +90,11 @@ func pageRoutes(ctx context.Context, publicRoute foundryhttp.Route[foundryhttp.N
 	public := foundryhttp.DefineEndpoint(route, query, body, response).Handle(showPage)
 	admin := foundryhttp.Authenticated(endpoint, adminGuard).Handle(createPage)
 	url, err := foundryhttp.DefineEndpoint(route, query, body, response).URL(ctx, pathValue, queryValue)
+	if err != nil {
+		return nil, "", err
+	}
 	// doc-example:end flat-routes-4
-	return []foundryhttp.RouteRegistration{public, admin}, url, err
+	return []foundryhttp.RouteRegistration{public, admin}, url, nil
 }
 
 func pageEndpoint(create foundryhttp.Route[foundryhttp.NoPath]) foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, SavePageRequest, PageResource] {

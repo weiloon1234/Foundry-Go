@@ -57,7 +57,7 @@ Inputs: `ctx context.Context`, `db database.Executor`.
 
 <!-- compiled-source: tests/fixtures/consumer/relationshipfilters/guide_relations.go#model-relations-2 -->
 ```go
-users, err := orm.All(ctx, db, models.Users.Query().With(models.UserLinks.Introducer,
+return orm.All(ctx, db, models.Users.Query().With(models.UserLinks.Introducer,
 	models.UserLinks.Orders.OrderBy(orm.Desc(models.Orders.TotalCents))))
 ```
 

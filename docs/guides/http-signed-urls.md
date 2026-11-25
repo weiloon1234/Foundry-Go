@@ -45,7 +45,7 @@ if err != nil {
 	return "", err
 }
 preview := foundryhttp.Signed(Preview, signer)
-link, err := preview.URL(ctx, publicOrigin,
+return preview.URL(ctx, publicOrigin,
 	UserPath{User: userID},
 	SearchInput{
 		User:     userID,
@@ -114,7 +114,7 @@ Inputs: `ctx context.Context`, `signer foundryhttp.URLSigner`, `publicOrigin fou
 ```go
 avatar := foundryhttp.SignRoute(AvatarRoute, signer)
 avatar = foundryhttp.ConfigureSignedRoute(avatar, foundryhttp.PermanentLinks())
-link, err := foundryhttp.PermanentRouteURL(avatar, ctx, publicOrigin, path)
+return foundryhttp.PermanentRouteURL(avatar, ctx, publicOrigin, path)
 ```
 
 A permanent link omits `expires` and uses its own MAC purpose, so removing the

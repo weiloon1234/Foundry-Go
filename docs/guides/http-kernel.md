@@ -18,7 +18,7 @@ These recipes need no application model; the transport and helper types they use
 
 Framework imports from `github.com/weiloon1234/Foundry-Go`: `foundation`, the root package `github.com/weiloon1234/Foundry-Go` as `foundry`, `http` as `foundryhttp`. Standard-library aliases: `net/http` as `stdhttp`.
 
-Inputs: `ctx context.Context`, `handler http.Handler`.
+Inputs: `ctx context.Context`, `handler stdhttp.Handler`.
 
 <!-- compiled-source: tests/fixtures/consumer/httpkernel/server_recipe.go#http-kernel-1 -->
 ```go

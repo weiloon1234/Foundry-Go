@@ -18,13 +18,12 @@ func publicHandler(router http.Handler, proxy foundryhttp.TrustedProxyConfig, se
 		},
 		Canonical: value.Set(foundryhttp.Origin("https://app.example.test")),
 	}
-	handler, err := foundryhttp.ApplyMiddleware(router,
+	return foundryhttp.ApplyMiddleware(router,
 		foundryhttp.TrustedProxy(proxy),
 		foundryhttp.PublicURLs(public),
 		foundryhttp.SecurityHeaders(security),
 	)
 	// doc-example:end http-public-urls-1
-	return handler, err
 }
 
 func tenantOrigins() foundryhttp.PublicURLConfig {

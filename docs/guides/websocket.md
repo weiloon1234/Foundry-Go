@@ -11,12 +11,10 @@
 
 ## Overview
 
-Milestone 14 passed native acceptance, race checks, compiler/editor checks and
-bounded protocol fuzzing. The [independent consumer](../../tests/fixtures/consumer/realtime/orders.go)
+The [independent consumer](../../tests/fixtures/consumer/realtime/orders.go)
 shows typed declarations, a domain service and the WebSocket kernel. Distributed
 fan-out, TTL presence, revocation refresh and bounded replay are described in the
-[distributed runtime guide](websocket-distributed.md); the roadmap records their
-separate milestone 15 acceptance.
+[distributed runtime guide](websocket-distributed.md).
 
 <a id="recipe-declare-channel"></a>
 ## Declare channels and events once

@@ -10,10 +10,9 @@ import (
 
 func throttleFactorCheck(ctx context.Context, throttle lockout.Throttle[model.ID[Account]], key model.ID[Account], submittedCode mfa.TOTPCode, verifyFactor func(context.Context, mfa.TOTPCode) (bool, error)) (bool, error) {
 	// doc-example:begin throttle-factor-check
-	verified, err := throttle.Run(ctx, key, func(op context.Context) (bool, error) {
+	// Only a true result with no error may grant authority or issue credentials.
+	return throttle.Run(ctx, key, func(op context.Context) (bool, error) {
 		return verifyFactor(op, submittedCode)
 	})
-	// Only a true result with no error may grant authority or issue credentials.
 	// doc-example:end throttle-factor-check
-	return verified, err
 }

@@ -7,9 +7,9 @@ other request-independent kernels use `AbsoluteURL` with an explicit configured
 
 These recipes need no application model; the transport and helper types they use are declared or described on this page.
 
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `http` as `foundryhttp`, `value`.
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `http` as `foundryhttp`, `value`. Standard-library aliases: `net/http` as `stdhttp`.
 
-Inputs: `router http.Handler`, `proxy foundryhttp.TrustedProxyConfig`, `security foundryhttp.SecurityHeadersConfig`.
+Inputs: `router stdhttp.Handler`, `proxy foundryhttp.TrustedProxyConfig`, `security foundryhttp.SecurityHeadersConfig`.
 
 <!-- compiled-source: tests/fixtures/consumer/httpsecurity/public_url_recipes.go#http-public-urls-1 -->
 ```go
@@ -20,7 +20,7 @@ public := foundryhttp.PublicURLConfig{
 	},
 	Canonical: value.Set(foundryhttp.Origin("https://app.example.test")),
 }
-handler, err := foundryhttp.ApplyMiddleware(router,
+return foundryhttp.ApplyMiddleware(router,
 	foundryhttp.TrustedProxy(proxy),
 	foundryhttp.PublicURLs(public),
 	foundryhttp.SecurityHeaders(security),

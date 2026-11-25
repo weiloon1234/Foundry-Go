@@ -284,7 +284,7 @@ the scheduler:
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/pruning_recipes.go#prune-sessions-hourly -->
 ```go
-cleanup, err := calendar.Hourly("auth.sessions.prune", func(ctx context.Context, _ schedule.Invocation) error {
+return calendar.Hourly("auth.sessions.prune", func(ctx context.Context, _ schedule.Invocation) error {
 	_, err := web.PruneExpired(ctx, 1024, 16)
 	return err
 })

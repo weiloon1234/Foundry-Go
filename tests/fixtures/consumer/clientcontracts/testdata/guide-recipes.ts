@@ -229,11 +229,14 @@ export async function submitWithRetry<Request extends { idempotencyKey: sdk.Idem
   try {
     return await send(request);
   } catch (error) {
-    if (error instanceof sdk.APIError) {
-      throw error;
+    // fetch rejects with a TypeError on a network failure and the transport raises a
+    // TimeoutError when no response headers arrive: delivery is uncertain, so send
+    // the same request unchanged, with the same key.
+    if (error instanceof TypeError || (error instanceof DOMException && error.name === "TimeoutError")) {
+      return send(request);
     }
-    // Delivery is uncertain: send the same request unchanged, with the same key.
-    return send(request);
+    // An APIError or contract error means the server answered; an abort was requested.
+    throw error;
   }
 }
 // doc-example:end idempotent-retry
