@@ -90,6 +90,9 @@ if err != nil {
 	return err
 }
 _, err = work.Dispatch(ctx, ReportPayload{ReportID: id}, jobs.Options[ReportPayload]{})
+if err != nil {
+	return err
+}
 ```
 
 An empty per-call queue uses the connection default. An explicit queue wins. The

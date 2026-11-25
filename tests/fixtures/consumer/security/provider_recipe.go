@@ -15,8 +15,7 @@ type RepositoryAccountID int64
 func repositoryVerifier(githubSecret secret.String, account RepositoryAccountID) (*webhook.Verifier[RepositoryAccountID], error) {
 	// doc-example:begin webhooks-2
 	config := webhook.GitHubConfig("github") // or ShopifyConfig / SlackConfig
-	verifier, err := webhook.New(config, account,
+	return webhook.New(config, account,
 		[]secret.String{githubSecret}, clock.System{})
 	// doc-example:end webhooks-2
-	return verifier, err
 }

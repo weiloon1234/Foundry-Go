@@ -110,6 +110,9 @@ limits := contract.JSONLimits{
 	Issues: 20,
 }
 request, err := ProfileBody.Decode(ctx, payload, limits)
+if err != nil {
+	return UpdateProfile{}, err
+}
 ```
 
 `contract` is Foundry's contract package. `request` has type `UpdateProfile`.

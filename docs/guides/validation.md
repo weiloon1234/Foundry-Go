@@ -472,7 +472,7 @@ type AvailabilityWindow struct {
 <!-- compiled-source: tests/fixtures/consumer/validationrules/window.go#compare-window-fields -->
 ```go
 fields := AvailabilityWindowValidationFields()
-rules := validation.BeforeField(fields.Start, fields.End)
+return validation.BeforeField(fields.Start, fields.End)
 ```
 
 Both fields retain `temporal.DateTime`. Mixing a date, local wall time or instant

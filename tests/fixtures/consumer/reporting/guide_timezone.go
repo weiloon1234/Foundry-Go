@@ -22,29 +22,45 @@ func reportService(s application.Services) *Reports {
 
 func calendarDates(s application.Services) error {
 	// doc-example:begin application-timezone-3
-	// Check err after each call.
 	dates := s.Time()
-	now, err := dates.Now()     // UTC instant
+	now, err := dates.Now() // UTC instant
+	if err != nil {
+		return err
+	}
 	today, err := dates.Today() // date in the application zone
+	if err != nil {
+		return err
+	}
 	when, err := dates.Parse("2026-09-26T09:00:00")
-	text, err := dates.Format(when)         // 2026-09-26T09:00:00+08:00
-	start, err := dates.StartOfDay(when)    // local midnight as a UTC instant
+	if err != nil {
+		return err
+	}
+	text, err := dates.Format(when) // 2026-09-26T09:00:00+08:00
+	if err != nil {
+		return err
+	}
+	start, err := dates.StartOfDay(when) // local midnight as a UTC instant
+	if err != nil {
+		return err
+	}
 	tomorrow, err := dates.AddDays(when, 1) // same local time next calendar day
+	if err != nil {
+		return err
+	}
 	// doc-example:end application-timezone-3
 	_ = now
 	_ = today
 	_ = text
 	_ = start
 	_ = tomorrow
-	return err
+	return nil
 }
 
 func dailyReport(s application.Services, handler schedule.Handler) (schedule.Declaration, error) {
 	// doc-example:begin application-timezone-4
 	calendar := s.Calendar()
-	daily, err := calendar.DailyAt("reports.daily", "09:00", handler)
+	return calendar.DailyAt("reports.daily", "09:00", handler)
 	// doc-example:end application-timezone-4
-	return daily, err
 }
 
 // doc-example:begin report-dates-constructor

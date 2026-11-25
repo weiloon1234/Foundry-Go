@@ -24,10 +24,6 @@
 
 Further reading: [Export ownership](#export-from-the-application), [Validation metadata](#validation-and-ui-metadata).
 
-Milestone 21 passed native framework/consumer verification, strict TypeScript,
-real HTTP/WebSocket interoperability, compiler/editor, generation/recovery, race
-and bounded fuzz checks.
-
 `contract/manifest` collects the application's **registered** HTTP endpoints,
 WebSocket channels, notification outputs, datatables, locale definitions, enums
 and permissions. DTO descriptors own public fields. Database models and private

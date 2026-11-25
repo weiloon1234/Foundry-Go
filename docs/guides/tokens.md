@@ -512,7 +512,7 @@ from a scheduler handler:
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/pruning_recipes.go#prune-tokens-hourly -->
 ```go
-cleanup, err := calendar.Hourly("auth.tokens.prune", func(ctx context.Context, _ schedule.Invocation) error {
+return calendar.Hourly("auth.tokens.prune", func(ctx context.Context, _ schedule.Invocation) error {
 	_, err := api.PruneExpired(ctx, token.MaxPruneFamilies, 16)
 	return err
 })

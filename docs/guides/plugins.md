@@ -1,8 +1,5 @@
 # Plugins
 
-Milestone 22 passed native full verification, independent consumer review,
-PostgreSQL integration, compiler/editor checks, races and bounded fuzzing.
-
 Plugins are ordinary Go packages linked explicitly into the application. A
 constructor returns a `plugin.Module` or implements `plugin.Plugin`. Handle any
 constructor error, then pass the plugin to `foundry.New().RegisterPlugin(...)`,

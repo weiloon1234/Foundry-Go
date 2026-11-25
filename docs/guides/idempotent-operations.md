@@ -1,7 +1,5 @@
 # Idempotent operations
 
-T06 native acceptance passed.
-
 <a id="agent-entry"></a>
 ## Agent entry
 
@@ -33,6 +31,8 @@ statement: drop the index with `DROP INDEX CONCURRENTLY IF EXISTS
 A store never migrates automatically. The application module starts its expiry
 pruner (see [Atomicity and bounds](#atomicity-and-bounds)); a standalone
 `idempotency.New` store prunes only after an explicit `Start`.
+
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `auth`, `database`, `database/orm`, `events`, `http` as `foundryhttp`, `idempotency`, `http/modelbinding`, `value`.
 
 Adapt an existing typed endpoint after declaring its decoding, normalization,
 validation and authorization:
@@ -278,8 +278,12 @@ export function submissionKey(): sdk.IdempotencyKey {
 ```
 
 Pass the generated operation as `send`, for example
-`(request) => api.ordersCreate(request)`. A definite server answer (`APIError`) is
-returned as is; only an uncertain delivery sends the unchanged request again:
+`(request) => api.ordersCreate(request)`. The generated client exposes no flag that
+marks a failure as safe to retry, so the recipe retries only a network failure (the
+`TypeError` that `fetch` rejects with) or a response timeout (`TimeoutError`), sending
+the unchanged request with the same key. A server answer (`APIError`, or a response
+that breaks the contract) and an abort are thrown as they are; adapt the test to your
+transport:
 
 <!-- compiled-source: tests/fixtures/consumer/clientcontracts/testdata/guide-recipes.ts#idempotent-retry -->
 ```typescript
@@ -290,11 +294,14 @@ export async function submitWithRetry<Request extends { idempotencyKey: sdk.Idem
   try {
     return await send(request);
   } catch (error) {
-    if (error instanceof sdk.APIError) {
-      throw error;
+    // fetch rejects with a TypeError on a network failure and the transport raises a
+    // TimeoutError when no response headers arrive: delivery is uncertain, so send
+    // the same request unchanged, with the same key.
+    if (error instanceof TypeError || (error instanceof DOMException && error.name === "TimeoutError")) {
+      return send(request);
     }
-    // Delivery is uncertain: send the same request unchanged, with the same key.
-    return send(request);
+    // An APIError or contract error means the server answered; an abort was requested.
+    throw error;
   }
 }
 ```
@@ -311,8 +318,7 @@ requests, SQL driver commands, scoped checkouts, outer transaction residence tim
 stored bytes and allocations. Warm command/checkouts explain expected round trips;
 these counts are not packet-level network measurements. Outer transaction residence
 bounds the claim row's lock lifetime and includes waiting and callback work; it is
-not an isolated PostgreSQL lock timer. The complete native gate passed. T07 still owns the
-integrated T01–T06 audit, improvements and final verification.
+not an isolated PostgreSQL lock timer.
 
 Three native local PostgreSQL samples (300 iterations each, Apple M4 Max, warm
 build cache) measured the following medians for one business INSERT and a 15-byte

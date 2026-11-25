@@ -35,17 +35,31 @@ func takeMemberQuota(ctx context.Context, client ratelimit.Backend, namespace ke
 
 func inspectMemberQuota(ctx context.Context, limiter ratelimit.Limiter[model.ID[Member]], member Member, sendVerification func(context.Context, Member) error) error {
 	// doc-example:begin inspect-member-quota
-	// Check err after each call.
-	decision, err := limiter.Peek(ctx, member.ID, 5)    // non-consuming Decision
+	decision, err := limiter.Peek(ctx, member.ID, 5) // non-consuming Decision
+	if err != nil {
+		return err
+	}
 	remaining, err := limiter.Remaining(ctx, member.ID) // uint32
+	if err != nil {
+		return err
+	}
 	wait, err := limiter.AvailableIn(ctx, member.ID, 5) // time.Duration, 0 if it fits now
-	cleared, err := limiter.Clear(ctx, member.ID)       // bool
+	if err != nil {
+		return err
+	}
+	cleared, err := limiter.Clear(ctx, member.ID) // bool
+	if err != nil {
+		return err
+	}
 	decision, err = limiter.Attempt(ctx, member.ID, 1, func(ctx context.Context) error {
 		return sendVerification(ctx, member)
 	})
+	if err != nil {
+		return err
+	}
 	// doc-example:end inspect-member-quota
 	_, _, _, _ = decision, remaining, wait, cleared
-	return err
+	return nil
 }
 
 func memberRateMiddleware(limiter ratelimit.Limiter[model.ID[Member]], currentMemberID func(context.Context) (model.ID[Member], error)) foundryhttp.Middleware {

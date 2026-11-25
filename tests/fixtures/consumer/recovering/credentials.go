@@ -33,9 +33,12 @@ func CredentialRevocations(users auth.Provider[Member, model.ID[Member]], sessio
 		return nil, err
 	}
 	revocations, err := auth.NewRevocations(users, web, api)
+	if err != nil {
+		return nil, err
+	}
 	// Pass the Invalidate method of revocations as the reset model's Invalidate callback.
 	// doc-example:end credential-revocations
-	return revocations, err
+	return revocations, nil
 }
 
 // NewLogin uses the same provider/model as recovery and the credential guards.

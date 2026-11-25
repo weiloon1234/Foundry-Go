@@ -1,7 +1,5 @@
 # Model extensions
 
-Milestone 18 passed native verification and consumer review.
-
 See also
 [attachments](attachments.md) for collection policy and recoverable storage, and
 [model extension slots](model-extension-slots.md) for declaring translated text,

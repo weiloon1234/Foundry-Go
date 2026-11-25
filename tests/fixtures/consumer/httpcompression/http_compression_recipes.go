@@ -8,12 +8,11 @@ import (
 
 func compressedHandler(router http.Handler) (http.Handler, error) {
 	// doc-example:begin http-compression-1
-	handler, err := foundryhttp.ApplyMiddleware(
+	return foundryhttp.ApplyMiddleware(
 		router,
 		foundryhttp.Compression(foundryhttp.DefaultCompressionConfig()),
 	)
 	// doc-example:end http-compression-1
-	return handler, err
 }
 
 func compressionConfig() foundryhttp.CompressionConfig {
@@ -29,11 +28,10 @@ func compressionConfig() foundryhttp.CompressionConfig {
 
 func compressedETags(router http.Handler) (http.Handler, error) {
 	// doc-example:begin http-compression-3
-	handler, err := foundryhttp.ApplyMiddleware(
+	return foundryhttp.ApplyMiddleware(
 		router,
 		foundryhttp.ETags(foundryhttp.DefaultETagConfig()),
 		foundryhttp.Compression(foundryhttp.DefaultCompressionConfig()),
 	)
 	// doc-example:end http-compression-3
-	return handler, err
 }

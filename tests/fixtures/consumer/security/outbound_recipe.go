@@ -26,22 +26,38 @@ var deliverWebhooks = outbound.DefineDeliveryJob("webhooks.deliver", jobs.Defaul
 
 // doc-example:end invoice-event
 
-func runWebhookWorker(ctx context.Context, db *database.DB, keyring *encryption.Keyring, restrictedClient *httpclient.Client, backend jobs.Backend, workerConfig jobs.WorkerConfig) error {
+func newWebhookService(db *database.DB, keyring *encryption.Keyring, restrictedClient *httpclient.Client) (*outbound.Service, error) {
 	// doc-example:begin webhooks-service
-	service, err := outbound.New(outbound.Dependencies{DB: db, Keys: keyring, Client: restrictedClient, Clock: clock.System{}}, outbound.DefaultConfig())
+	return outbound.New(outbound.Dependencies{DB: db, Keys: keyring, Client: restrictedClient, Clock: clock.System{}}, outbound.DefaultConfig())
+	// doc-example:end webhooks-service
+}
+
+func declareDeliveryJob(service *outbound.Service) (jobs.Declaration, error) {
+	// doc-example:begin webhooks-declare
+	return deliverWebhooks.Declare(service)
+	// doc-example:end webhooks-declare
+}
+
+func deliveryFailureSink(service *outbound.Service) (jobs.FailureSink, error) {
+	// doc-example:begin webhooks-sink
+	return deliverWebhooks.FailureSink(service)
+	// doc-example:end webhooks-sink
+}
+
+func runWebhookWorker(ctx context.Context, db *database.DB, keyring *encryption.Keyring, restrictedClient *httpclient.Client, backend jobs.Backend, workerConfig jobs.WorkerConfig) error {
+	service, err := newWebhookService(db, keyring, restrictedClient)
 	if err != nil {
 		return err
 	}
 	defer service.Close(context.Background())
-	declaration, err := deliverWebhooks.Declare(service) // register with the job registry
+	declaration, err := declareDeliveryJob(service)
 	if err != nil {
 		return err
 	}
-	sink, err := deliverWebhooks.FailureSink(service) // register with every worker running it
+	sink, err := deliveryFailureSink(service)
 	if err != nil {
 		return err
 	}
-	// doc-example:end webhooks-service
 	registry, err := jobs.NewRegistry(declaration)
 	if err != nil {
 		return err

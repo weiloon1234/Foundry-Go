@@ -2,9 +2,9 @@
 
 These recipes need no application model; the transport and helper types they use are declared or described on this page.
 
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `http` as `foundryhttp`, `value`.
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `http` as `foundryhttp`, `value`. Standard-library aliases: `net/http` as `stdhttp`.
 
-Inputs: `router http.Handler`.
+Inputs: `router stdhttp.Handler`.
 
 Use the shared [middleware assembly](http-middleware.md) to apply response policy
 before the router and its error responses:

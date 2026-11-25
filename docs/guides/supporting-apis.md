@@ -1,6 +1,6 @@
 # Supporting APIs
 
-Milestone 20 passed native verification and consumer review. These helpers use
+These helpers use
 focused packages and ordinary Go values.
 
 ## Cryptography and tokens

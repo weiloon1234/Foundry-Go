@@ -37,6 +37,8 @@ The encoder does not choose or apply model getters automatically.
 
 ## Slices and explicit null
 
+The blocks in this section continue one scope: an `Inputs:` line names only what no earlier block in the section has introduced.
+
 Inputs: `ctx context.Context`, `response UserResponse`, `limits contract.JSONLimits`.
 
 Compose descriptors from an existing generated descriptor:
@@ -44,20 +46,16 @@ Compose descriptors from an existing generated descriptor:
 <!-- compiled-source: tests/fixtures/consumer/httpdto/response_recipes.go#http-responses-2 -->
 ```go
 users := contract.Slice(UserResponseJSON())
-body, err := users.Encode(ctx, []UserResponse{response}, limits)
+return users.Encode(ctx, []UserResponse{response}, limits)
 ```
-
-Inputs: `ctx context.Context`, `response UserResponse`, `limits contract.JSONLimits`.
 
 Encode a present nullable response:
 
 <!-- compiled-source: tests/fixtures/consumer/httpdto/response_recipes.go#http-responses-2-2 -->
 ```go
 optionalUser := contract.Nullable(UserResponseJSON())
-body, err := optionalUser.Encode(ctx, value.Of(response), limits)
+return optionalUser.Encode(ctx, value.Of(response), limits)
 ```
-
-Inputs: `ctx context.Context`, `limits contract.JSONLimits`.
 
 Encode an explicit null response:
 

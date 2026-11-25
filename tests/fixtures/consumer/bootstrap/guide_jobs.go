@@ -33,6 +33,9 @@ func queueReport(ctx context.Context, services application.Services, id ReportID
 		return err
 	}
 	_, err = work.Dispatch(ctx, ReportPayload{ReportID: id}, jobs.Options[ReportPayload]{})
+	if err != nil {
+		return err
+	}
 	// doc-example:end supporting-services-1
-	return err
+	return nil
 }

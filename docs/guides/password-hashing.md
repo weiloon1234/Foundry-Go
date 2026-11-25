@@ -6,7 +6,7 @@ Typed Argon2id passwords and hashes integrate with handwritten ORM fields, model
 
 The application owns `Account` and any generated tables or identities used below.
 
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `auth`, `model`, `database/orm`, `auth/password`, `secret`, `value`.
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `auth`, `model`, `auth/password`, `secret`.
 
 Inputs: `ctx context.Context`, `submittedPassword string`.
 

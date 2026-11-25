@@ -7,13 +7,13 @@ applies this to an existing generated endpoint; it declares no OPTIONS route.
 
 These recipes need no application model; the transport and helper types they use are declared or described on this page.
 
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `http` as `foundryhttp`.
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `http` as `foundryhttp`. Standard-library aliases: `net/http` as `stdhttp`.
 
-Inputs: `router http.Handler`.
+Inputs: `router stdhttp.Handler`.
 
 <!-- compiled-source: tests/fixtures/consumer/httpcors/http_cors_recipes.go#http-cors-1 -->
 ```go
-handler, err := foundryhttp.ApplyMiddleware(router, foundryhttp.CORS(foundryhttp.CORSConfig{
+return foundryhttp.ApplyMiddleware(router, foundryhttp.CORS(foundryhttp.CORSConfig{
 	Origins:       []foundryhttp.Origin{"https://console.example.test"},
 	Methods:       []foundryhttp.Method{foundryhttp.PATCH},
 	Headers:       []foundryhttp.HeaderName{"Content-Type", "Authorization"},

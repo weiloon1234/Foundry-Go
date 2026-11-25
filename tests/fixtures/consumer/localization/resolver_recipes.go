@@ -27,14 +27,9 @@ func resolveRecipientLocale(ctx context.Context, catalog *i18n.Catalog, recipien
 	if err != nil {
 		return ctx, i18n.Resolution{}, err
 	}
-	resolution, err := resolver.Resolve(ctx, recipient)
-	if err != nil {
-		return ctx, resolution, err
-	}
-	// resolution.Locale is supported; resolution.Source is "context", "user",
+	// The returned Resolution's Locale is supported; its Source is "context", "user",
 	// "accept_language" or "default" ("user" is this application's source name).
 	// WithResolvedLocale also attaches the supported locale to the context.
-	resolvedContext, resolution, err := resolver.WithResolvedLocale(ctx, recipient)
+	return resolver.WithResolvedLocale(ctx, recipient)
 	// doc-example:end resolve-recipient-locale
-	return resolvedContext, resolution, err
 }

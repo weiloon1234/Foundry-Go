@@ -3,8 +3,6 @@
 See [request-aware validation messages](validation-messages.md) for automatic HTTP
 rendering, built-in translations, typed overrides and generated client presentation.
 
-Milestone 20 passed native verification and consumer review.
-
 Use one `i18n.LocaleSet` from application configuration for UI catalogs, model
 translations and localized attachments. Translated model fields declared as
 [model extension slots](model-extension-slots.md) follow the same catalog, and
@@ -269,14 +267,10 @@ resolver, err := i18n.NewLocaleResolver(catalog,
 if err != nil {
 	return ctx, i18n.Resolution{}, err
 }
-resolution, err := resolver.Resolve(ctx, recipient)
-if err != nil {
-	return ctx, resolution, err
-}
-// resolution.Locale is supported; resolution.Source is "context", "user",
+// The returned Resolution's Locale is supported; its Source is "context", "user",
 // "accept_language" or "default" ("user" is this application's source name).
 // WithResolvedLocale also attaches the supported locale to the context.
-resolvedContext, resolution, err := resolver.WithResolvedLocale(ctx, recipient)
+return resolver.WithResolvedLocale(ctx, recipient)
 ```
 
 `ContextLocale` uses a locale recorded by `WithLocale`. `Preferred` adapts an

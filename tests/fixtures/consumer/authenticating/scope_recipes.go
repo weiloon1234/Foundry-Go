@@ -22,18 +22,16 @@ func manualRequestScope(ctx context.Context, api, web auth.Guard[models.User], c
 	}
 	defer scope.Close()
 	ctx = scope.Context()
-	user, err := api.Require(ctx)
+	return api.Require(ctx)
 	// doc-example:end manual-request-scope
-	return user, err
 }
 
 func configuredAuthorization(ctx context.Context, settings application.Settings, readOrder auth.Policy[models.User, models.Order]) (*application.App, error) {
 	// doc-example:begin configured-authorization
-	app, err := application.New(settings).Register(application.Authorization("app.authorization",
+	return application.New(settings).Register(application.Authorization("app.authorization",
 		application.Authorize(ViewAccount), application.Authorize(readOrder),
 	)).Build(ctx)
 	// doc-example:end configured-authorization
-	return app, err
 }
 
 func policyHooks(isSuperAdmin func(context.Context, models.User) (bool, error), readOnlyMode *atomic.Bool) (auth.Before[models.User], auth.After[models.User]) {

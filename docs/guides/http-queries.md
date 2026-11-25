@@ -19,7 +19,7 @@ Declare the query in the same package and run `foundry generate`; `SearchInputDe
 
 `models.Status` is the application's string-backed `//foundry:enum`, with `StatusActive = "active"` and `StatusDisabled = "disabled"`; generate its enum descriptor with the model package.
 
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `http` as `foundryhttp`, `model`, `value`.
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `http` as `foundryhttp`, `model`, `value`. Standard-library aliases: `net/http` as `stdhttp`.
 
 <!-- compiled-source: tests/fixtures/consumer/httpquery/query.go#query-presence -->
 ```go
@@ -33,7 +33,7 @@ type SearchInput struct {
 
 The application owns `models.User` and any generated tables or identities used below.
 
-Inputs: `ctx context.Context`, `request *http.Request`, `parameters foundryhttp.Query[SearchInput]`.
+Inputs: `ctx context.Context`, `request *stdhttp.Request`, `parameters foundryhttp.Query[SearchInput]`.
 
 <!-- compiled-source: tests/fixtures/consumer/httpquery/query_recipes.go#http-queries-1 -->
 ```go

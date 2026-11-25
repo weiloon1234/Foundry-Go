@@ -9,12 +9,6 @@
 
 ## Overview
 
-Milestone 18 passed native verification and consumer review.
-The imaging expansion
-also passed its final portable/native, consumer and framework verification gates.
-The runtime-loading follow-up
-passed ordinary native builds, missing-library consumers and the full gate.
-
 <a id="recipe-process-image"></a>
 ## Configure an engine and process an image
 

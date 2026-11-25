@@ -46,6 +46,8 @@ policy owns expiry. Browser configuration cannot override MaxAge or Expires.
 
 ## Typed handlers
 
+The blocks in this section continue one scope: an `Inputs:` line names only what no earlier block in the section has introduced.
+
 Public login/logout endpoints add `web.Middleware()` using ordinary
 `http.ConfigureEndpoint(endpoint, http.Use(web.Middleware()))`. Guarded endpoints use
 `http.RequireAuthentication(endpoint, web.Authentication(), web.Guard())`; that
@@ -53,11 +55,9 @@ transport automatically establishes browser-session policy before authentication
 A scope-level browser middleware and its matching authenticated routes safely reuse
 one request binding. A different browser adapter cannot reuse that binding.
 
-Inside a public typed login handler, after trusted credential verification:
-
 Inputs: `web *UserBrowserSessions`, `verify func(context.Context) (auth.Proof[models.User, model.ID[models.User]], error)`.
 
-The verifier must authenticate the submitted credentials or consume an application-owned browser-bound handoff. Credential issuance happens in this typed POST handler:
+Inside a public typed login handler, after trusted credential verification, the verifier must authenticate the submitted credentials or consume an application-owned browser-bound handoff. Credential issuance happens in this typed POST handler:
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/browser_recipes.go#typed-browser-login -->
 ```go
@@ -73,7 +73,7 @@ registration := foundryhttp.ConfigureEndpoint(endpoint, foundryhttp.Use(web.Midd
 })
 ```
 
-Inputs: `ctx context.Context`, `web *UserBrowserSessions`, `verifiedProof auth.Proof[models.User, model.ID[models.User]]`.
+Inputs: `ctx context.Context`, `verifiedProof auth.Proof[models.User, model.ID[models.User]]`.
 
 <!-- compiled-source: tests/fixtures/consumer/authenticating/browser_recipes.go#remember-browser-login -->
 ```go
@@ -117,7 +117,7 @@ secret while preserving the session identity and absolute deadline. `Logout`
 revokes the credential before staging an exact-scope cookie removal. Missing
 credentials may still be logged out; malformed cookie input is rejected earlier.
 
-Inputs: `endpoint http.Endpoint[http.NoPath, http.NoQuery, http.NoBody, http.NoContent]`, `browser *UserBrowserSessions`.
+Inputs: `endpoint foundryhttp.Endpoint[foundryhttp.NoPath, foundryhttp.NoQuery, foundryhttp.NoBody, foundryhttp.NoContent]`, `browser *UserBrowserSessions`.
 
 Sensitive routes can require a recent password confirmation on the current
 session. A confirmation route re-verifies the password with

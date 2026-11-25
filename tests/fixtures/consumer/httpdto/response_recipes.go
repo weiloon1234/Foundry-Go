@@ -20,17 +20,15 @@ func encodeUser(ctx context.Context, userID model.ID[models.User], email string,
 func encodeUsers(ctx context.Context, response UserResponse, limits contract.JSONLimits) ([]byte, error) {
 	// doc-example:begin http-responses-2
 	users := contract.Slice(UserResponseJSON())
-	body, err := users.Encode(ctx, []UserResponse{response}, limits)
+	return users.Encode(ctx, []UserResponse{response}, limits)
 	// doc-example:end http-responses-2
-	return body, err
 }
 
 func encodePresentUser(ctx context.Context, response UserResponse, limits contract.JSONLimits) ([]byte, error) {
 	// doc-example:begin http-responses-2-2
 	optionalUser := contract.Nullable(UserResponseJSON())
-	body, err := optionalUser.Encode(ctx, value.Of(response), limits)
+	return optionalUser.Encode(ctx, value.Of(response), limits)
 	// doc-example:end http-responses-2-2
-	return body, err
 }
 func encodeNullUser(ctx context.Context, limits contract.JSONLimits) ([]byte, error) {
 	// doc-example:begin http-responses-2-3

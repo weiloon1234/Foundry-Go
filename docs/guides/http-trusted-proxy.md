@@ -2,9 +2,9 @@
 
 These recipes need no application model; the transport and helper types they use are declared or described on this page.
 
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `http` as `foundryhttp`.
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `http` as `foundryhttp`. Standard-library aliases: `net/http` as `stdhttp`.
 
-Inputs: `router http.Handler`.
+Inputs: `router stdhttp.Handler`.
 
 The HTTP kernel initially attributes a request to its socket peer. Apply
 `TrustedProxy` through [global middleware](http-middleware.md) before rate limits,
@@ -12,7 +12,7 @@ guards or domain services consume client attribution:
 
 <!-- compiled-source: tests/fixtures/consumer/httpproxy/http_trusted_proxy_recipes.go#http-trusted-proxy-1 -->
 ```go
-handler, err := foundryhttp.ApplyMiddleware(router,
+return foundryhttp.ApplyMiddleware(router,
 	foundryhttp.TrustedProxy(foundryhttp.TrustedProxyConfig{
 		Proxies: []netip.Prefix{
 			netip.MustParsePrefix("10.20.0.0/24"),

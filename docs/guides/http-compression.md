@@ -7,13 +7,13 @@ Go contracts.
 
 These recipes need no application model; the transport and helper types they use are declared or described on this page.
 
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `http` as `foundryhttp`.
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `http` as `foundryhttp`. Standard-library aliases: `net/http` as `stdhttp`.
 
-Inputs: `router http.Handler`.
+Inputs: `router stdhttp.Handler`.
 
 <!-- compiled-source: tests/fixtures/consumer/httpcompression/http_compression_recipes.go#http-compression-1 -->
 ```go
-handler, err := foundryhttp.ApplyMiddleware(
+return foundryhttp.ApplyMiddleware(
 	router,
 	foundryhttp.Compression(foundryhttp.DefaultCompressionConfig()),
 )
@@ -96,13 +96,13 @@ The middleware merges `Vary: Accept-Encoding`. Encoding removes the original
 headers/trailers. Other declared trailers retain their values. Header changes
 after the first final `WriteHeader` cannot rewrite the response snapshot.
 
-Inputs: `router http.Handler`.
+Inputs: `router stdhttp.Handler`.
 
 When using automatic validators, declare `ETags` before `Compression`:
 
 <!-- compiled-source: tests/fixtures/consumer/httpcompression/http_compression_recipes.go#http-compression-3 -->
 ```go
-handler, err := foundryhttp.ApplyMiddleware(
+return foundryhttp.ApplyMiddleware(
 	router,
 	foundryhttp.ETags(foundryhttp.DefaultETagConfig()),
 	foundryhttp.Compression(foundryhttp.DefaultCompressionConfig()),

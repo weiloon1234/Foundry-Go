@@ -10,8 +10,6 @@
 
 ## Overview
 
-Milestone 17 passed native verification and consumer review.
-
 `notifications` binds a versioned input DTO to a typed recipient and channel
 renderers. It owns PostgreSQL notification/inbox rows and per-channel progress.
 It borrows the existing authentication provider, email mailer, WebSocket publisher

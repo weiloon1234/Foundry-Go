@@ -11,10 +11,7 @@
 
 Milestone 24 delivered shared logical-operation observations and explicit
 `Config.PropagateTrace`. Trace headers are off by default and remain subject to
-the named client's header budget. See [observability](observability.md); the
-milestone 24 verification passed as recorded in [production acceptance](../production-acceptance.md).
-
-Milestone 20 passed native verification and consumer review.
+the named client's header budget. See [observability](observability.md).
 
 <a id="recipe-named-http-client"></a>
 ## Resolve a client and bound the request
@@ -239,7 +236,7 @@ previews/imports or other untrusted URLs, opt into an enforced destination polic
 settings := httpclient.DefaultConfig("preview")
 settings.Destination = httpclient.PublicDestinations()      // HTTPS, port 443
 settings.Destination.Hosts = []string{"images.example.com"} // optional exact names
-client, err := httpclient.New(settings, nil)
+return httpclient.New(settings, nil)
 ```
 
 `Destination` is also part of configured named HTTP-client settings. The policy

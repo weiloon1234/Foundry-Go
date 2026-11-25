@@ -31,12 +31,11 @@ func buyersAndOthers(ctx context.Context, db database.Executor) error {
 func buyersOrActive(ctx context.Context, db database.Executor, orders orm.HasMany[models.User, models.Order]) ([]models.User, error) {
 	// doc-example:begin model-relationship-filters-2
 	u := models.Users
-	users, err := orm.All(ctx, db, models.Users.Query().Where(orm.Or(
+	return orm.All(ctx, db, models.Users.Query().Where(orm.Or(
 		orm.Has(orders),
 		orm.Eq(u.Status, models.StatusActive),
 	)))
 	// doc-example:end model-relationship-filters-2
-	return users, err
 }
 
 func referralBuyers(ctx context.Context, db database.Executor) ([]models.User, error) {

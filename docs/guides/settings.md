@@ -1,7 +1,5 @@
 # Settings
 
-Milestone 18 passed native verification and consumer review.
-
 <a id="agent-entry"></a>
 ## Agent entry
 
@@ -93,7 +91,7 @@ Hot settings can opt into a per-process read cache owned by the manager:
 
 <!-- compiled-source: tests/fixtures/consumer/configured/settings_cache_recipes.go#cache-site-name -->
 ```go
-manager, err := settings.New(store,
+return settings.New(store,
 	SiteName.RegistrationWith(settings.Options[string]{Cache: 30 * time.Second}))
 ```
 

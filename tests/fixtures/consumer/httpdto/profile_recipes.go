@@ -41,6 +41,9 @@ func decodeProfile(ctx context.Context, payload []byte) (UpdateProfile, error) {
 		Issues: 20,
 	}
 	request, err := ProfileBody.Decode(ctx, payload, limits)
+	if err != nil {
+		return UpdateProfile{}, err
+	}
 	// doc-example:end http-dtos-3
-	return request, err
+	return request, nil
 }

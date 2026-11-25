@@ -70,7 +70,7 @@ Inputs: `client *redis.Client`, `namespace keyspace.Namespace`.
 
 <!-- compiled-source: tests/fixtures/consumer/messaging/guide_pubsub.go#pubsub-2 -->
 ```go
-broker, err := pubsub.NewBroker(client, pubsub.DefaultConfig(namespace))
+return pubsub.NewBroker(client, pubsub.DefaultConfig(namespace))
 ```
 
 Here `client` is an existing `*redis.Client` and `namespace` is a shared

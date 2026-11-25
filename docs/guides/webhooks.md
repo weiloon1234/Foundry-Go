@@ -19,7 +19,7 @@ and Ed25519 public verification keys (`whpk_`). `webhook.Stripe` supports Stripe
 The same `whsec_` prefix has different key semantics in these protocols; select
 the provider's actual protocol rather than guessing from its key prefix.
 
-Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `webhook/capture`, `clock`, `database`, `encryption`, `http` as `foundryhttp`, `httpclient`, `idempotency`, `jobs`, `webhook/outbound`, `secret`, `webhook`.
+Framework imports from `github.com/weiloon1234/Foundry-Go`: `application`, `webhook/capture`, `clock`, `database`, `database/orm`, `encryption`, `http` as `foundryhttp`, `httpclient`, `idempotency`, `jobs`, `webhook/outbound`, `secret`, `webhook`.
 
 <!-- compiled-source: tests/fixtures/consumer/security/contracts.go#webhook-verifier -->
 ```go
@@ -67,7 +67,7 @@ Inputs: `githubSecret secret.String`, `account RepositoryAccountID`.
 <!-- compiled-source: tests/fixtures/consumer/security/provider_recipe.go#webhooks-2 -->
 ```go
 config := webhook.GitHubConfig("github") // or ShopifyConfig / SlackConfig
-verifier, err := webhook.New(config, account,
+return webhook.New(config, account,
 	[]secret.String{githubSecret}, clock.System{})
 ```
 
@@ -325,6 +325,8 @@ replicas from duplicating work.
 
 ## Sending webhooks
 
+The blocks in this section continue one scope: an `Inputs:` line names only what no earlier block in the section has introduced.
+
 `webhook/outbound` sends signed webhooks to registered endpoints through typed
 jobs and the transactional outbox, and keeps a delivery log.
 
@@ -342,28 +344,32 @@ var InvoicePaid = outbound.DefineEvent("invoice.paid", InvoicePaidPayloadJSON())
 var deliverWebhooks = outbound.DefineDeliveryJob("webhooks.deliver", jobs.DefaultPolicy("webhooks"))
 ```
 
-Inputs: `ctx context.Context`, `db *database.DB`, `keyring *encryption.Keyring`, `restrictedClient *httpclient.Client`.
+Inputs: `db *database.DB`, `keyring *encryption.Keyring`, `restrictedClient *httpclient.Client`.
 
-Build the service, then declare the delivery job and its failure sink once. Register the declaration with the job registry and the sink with every worker that runs the job.
+Build the service. The code that builds it owns it: call `service.Close(ctx)` on shutdown after the workers that use it have stopped (`outbound.Module` does this in foundation assembly).
 
 <!-- compiled-source: tests/fixtures/consumer/security/outbound_recipe.go#webhooks-service -->
 ```go
-service, err := outbound.New(outbound.Dependencies{DB: db, Keys: keyring, Client: restrictedClient, Clock: clock.System{}}, outbound.DefaultConfig())
-if err != nil {
-	return err
-}
-defer service.Close(context.Background())
-declaration, err := deliverWebhooks.Declare(service) // register with the job registry
-if err != nil {
-	return err
-}
-sink, err := deliverWebhooks.FailureSink(service) // register with every worker running it
-if err != nil {
-	return err
-}
+return outbound.New(outbound.Dependencies{DB: db, Keys: keyring, Client: restrictedClient, Clock: clock.System{}}, outbound.DefaultConfig())
 ```
 
-Inputs: `service *outbound.Service`, `producer *jobs.Outbox`.
+Inputs: `service *outbound.Service`.
+
+Declare the delivery job once and register the declaration with the job registry:
+
+<!-- compiled-source: tests/fixtures/consumer/security/outbound_recipe.go#webhooks-declare -->
+```go
+return deliverWebhooks.Declare(service)
+```
+
+Register the failure sink with every worker that runs the job:
+
+<!-- compiled-source: tests/fixtures/consumer/security/outbound_recipe.go#webhooks-sink -->
+```go
+return deliverWebhooks.FailureSink(service)
+```
+
+Inputs: `producer *jobs.Outbox`.
 
 Bind the job to the transactional outbox. `producer` is the job outbox the application already uses.
 
@@ -372,7 +378,7 @@ Bind the job to the transactional outbox. `producer` is the job outbox the appli
 return deliverWebhooks.ToOutbox(service, producer)
 ```
 
-Inputs: `ctx context.Context`, `service *outbound.Service`, `customerURL string`.
+Inputs: `ctx context.Context`, `customerURL string`.
 
 Register a customer endpoint. The signing secret is returned once.
 
@@ -381,7 +387,7 @@ Register a customer endpoint. The signing secret is returned once.
 return service.CreateEndpoint(ctx, outbound.EndpointOptions{URL: customerURL, Events: []outbound.EventType{"invoice.paid"}})
 ```
 
-Inputs: `ctx context.Context`, `tx *database.Tx`, `queue outbound.Queue`, `endpoint outbound.EndpointID`, `payload InvoicePaidPayload`.
+Inputs: `tx *database.Tx`, `queue outbound.Queue`, `endpoint outbound.EndpointID`, `payload InvoicePaidPayload`.
 
 Call one dispatch form inside the business transaction, according to its audience. `Send` targets one endpoint.
 
@@ -389,8 +395,6 @@ Call one dispatch form inside the business transaction, according to its audienc
 ```go
 return outbound.Send(ctx, tx, queue, endpoint, InvoicePaid, payload)
 ```
-
-Inputs: `ctx context.Context`, `tx *database.Tx`, `queue outbound.Queue`, `payload InvoicePaidPayload`.
 
 `Publish` fans the event out to every active subscribed endpoint.
 
